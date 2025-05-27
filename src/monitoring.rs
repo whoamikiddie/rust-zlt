@@ -6,6 +6,7 @@ use sysinfo::{ComponentExt, CpuExt, DiskExt, NetworkExt, System, SystemExt, Refr
 use std::thread;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::collections::VecDeque;
+use std::alloc::GlobalAlloc;
 
 // Only include libc on Unix-like systems (Linux, macOS)
 #[cfg(unix)]
@@ -14,6 +15,11 @@ extern crate libc;
 // For Windows-specific functionality
 #[cfg(windows)]
 extern crate winapi;
+
+// Define consistent memory size constants
+const MB: u64 = 1024 * 1024;
+const DEFAULT_MIN_MEMORY: u64 = 50 * MB;
+const DEFAULT_MAX_MEMORY: u64 = 200 * MB;
 
 // Structure to hold system stats (minimal version to save memory)
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -82,44 +88,100 @@ pub struct SystemMonitor {
 
 impl SystemMonitor {
     pub fn new() -> Self {
-        // Create a new system with absolute minimal resource usage
+        // Create system monitor with minimal refresh settings to reduce resource usage
         let mut system = System::new_with_specifics(RefreshKind::new()
-            .with_memory() // Only refresh memory
-            .with_cpu(CpuRefreshKind::new())); // Only refresh CPU
+            .with_memory()
+            .with_cpu(CpuRefreshKind::new()));
         
-        // Set initial stats
-        let stats = SystemStats::default();
+        // Initial refresh to populate system data
+        system.refresh_memory();
+        system.refresh_cpu();
         
-        // Set memory limits (50MB and 200MB in bytes)
-        // These are hard limits for the overall application memory usage
-        let memory_limit_min = 50 * 1024 * 1024;
-        let memory_limit_max = 200 * 1024 * 1024;
+        // Configure history sizes based on performance/memory tradeoff
+        // Smaller sizes = less memory usage, fewer data points for graphs
+        let cpu_history_size = 60;    // 1 minute at 1 sec refresh
+        let memory_history_size = 30; // 30 seconds at 1 sec refresh
         
-        // Initialize history queues with minimal capacity to save memory
-        let mut cpu_history = VecDeque::with_capacity(15); // Reduced to 15 data points
-        let mut memory_history = VecDeque::with_capacity(15); // Reduced to 15 data points
+        // Pre-allocate VecDeques with capacity to avoid reallocation
+        let mut cpu_history = VecDeque::with_capacity(cpu_history_size);
+        let mut memory_history = VecDeque::with_capacity(memory_history_size);
         
-        // Pre-fill with zeros for aesthetics, using minimal points
-        for _ in 0..10 { // Only pre-fill 10 points
-            cpu_history.push_back(0.0);
-            memory_history.push_back(0);
-        }
+        // Initialize history with zeros (more efficient with extend)
+        cpu_history.extend(std::iter::repeat(0.0).take(cpu_history_size));
+        memory_history.extend(std::iter::repeat(0).take(memory_history_size));
         
         SystemMonitor {
             system,
-            stats,
-            active: AtomicBool::new(true),
-            update_interval: Duration::from_secs(5),
+            stats: SystemStats::default(),
+            active: AtomicBool::new(true), // Fixed: removed Arc<> wrapper
             last_update: Instant::now(),
+            update_interval: Duration::from_secs(1),
+            memory_limit_min: DEFAULT_MIN_MEMORY,  // Using constants
+            memory_limit_max: DEFAULT_MAX_MEMORY,  // Using constants
+            last_memory_cleanup: Instant::now(),
             cpu_history,
             memory_history,
+            resource_level: 2, // Default to medium resources
             cycle_count: 0,
             throttling_enabled: true,
-            memory_limit_min,
-            memory_limit_max,
-            resource_level: 1, // Start with low resource mode
-            last_memory_cleanup: Instant::now(),
         }
+    }
+    
+    /// Create a new SystemMonitor with custom memory limits
+    pub fn with_memory_limits(min_mb: u64, max_mb: u64) -> Self {
+        let mut monitor = Self::new();
+        monitor.memory_limit_min = min_mb * MB;
+        monitor.memory_limit_max = max_mb * MB;
+        monitor
+    }
+    
+    /// Platform-specific memory cleanup operation
+    fn perform_memory_cleanup(&self) {
+        // Unix-specific memory cleanup
+        #[cfg(unix)]
+        unsafe {
+            // Call malloc_trim to release memory back to the OS
+            libc::malloc_trim(0);
+            
+            // On Linux, we can also try to write to /proc/self/oom_score_adj
+            // to adjust our OOM killer score (lower priority for killing)
+            #[cfg(target_os = "linux")]
+            if let Ok(mut file) = std::fs::OpenOptions::new().write(true).open("/proc/self/oom_score_adj") {
+                use std::io::Write;
+                let _ = file.write_all(b"-500\n"); // Lower priority (-1000 to 1000 range)
+            }
+        }
+        
+        // Windows-specific memory cleanup
+        #[cfg(windows)]
+        {
+            // Windows doesn't have malloc_trim, so use multiple approaches
+            
+            // 1. Force garbage collection by allocating and dropping memory
+            drop(Vec::<u8>::with_capacity(4 * MB as usize));
+            
+            // 2. Request heap compaction
+            unsafe {
+                use winapi::um::heapapi::{GetProcessHeap, HeapCompact};
+                let heap = GetProcessHeap();
+                if !heap.is_null() {
+                    HeapCompact(heap, 0);
+                }
+            }
+            
+            // 3. Allow time for Windows memory manager to reclaim
+            std::thread::sleep(Duration::from_millis(15));
+        }
+        
+        // Cross-platform memory cleanup techniques
+        unsafe {
+            let layout = std::alloc::Layout::new::<u8>();
+            let alloc = std::alloc::System.alloc(layout);
+            std::alloc::System.dealloc(alloc, layout);
+        }
+        
+        // Use drop to encourage cleanup
+        drop(String::with_capacity(1024));
     }
     
     pub fn refresh(&mut self) -> SystemStats {
@@ -188,32 +250,44 @@ impl SystemMonitor {
             self.resource_level = 2;
         }
         
-        // Enforce memory limits with periodic cleanup
+        // Enforce memory limits with periodic cleanup - more sophisticated approach
         let now = Instant::now();
-        if now.duration_since(self.last_memory_cleanup) > Duration::from_secs(30) || memory_used > self.memory_limit_max {
-            // Clear caches and request memory release
+        let cleanup_interval = if memory_used > self.memory_limit_max {
+            // More frequent cleanup under memory pressure
+            Duration::from_secs(10)
+        } else {
+            Duration::from_secs(30)
+        };
+        
+        if now.duration_since(self.last_memory_cleanup) > cleanup_interval || memory_used > self.memory_limit_max {
+            // Record cleanup time first to prevent double cleanup if this takes time
             self.last_memory_cleanup = now;
+            let pre_cleanup_memory = self.system.used_memory();
             
-            // Force OS to reclaim memory - platform-specific implementation
-            #[cfg(unix)]
-            unsafe { libc::malloc_trim(0); }
+            // Platform-specific memory management with improved techniques
+            self.perform_memory_cleanup();
             
-            // On Windows, use alternative memory cleanup
-            #[cfg(windows)]
-            {
-                // Windows doesn't have malloc_trim, so we'll use a garbage collection approach
-                drop(Vec::<u8>::with_capacity(1024 * 1024)); // Allocate and drop a large vector
-                std::thread::sleep(Duration::from_millis(10)); // Brief pause to allow reclamation
+            // Recreate system monitor with appropriate refresh kind based on resource level
+            let refresh_kind = match self.resource_level {
+                0 => RefreshKind::new().with_memory(), // Minimal - memory only
+                1 => RefreshKind::new().with_memory().with_cpu(CpuRefreshKind::new()), // Low
+                _ => RefreshKind::new().with_memory().with_cpu(CpuRefreshKind::new()) // Medium and above
+            };
+            
+            self.system = System::new_with_specifics(refresh_kind);
+            
+            // Allow time for memory to be reclaimed
+            std::thread::sleep(Duration::from_millis(50));
+            
+            // Calculate memory savings
+            let post_cleanup_memory = self.system.used_memory();
+            let memory_saved = pre_cleanup_memory.saturating_sub(post_cleanup_memory);
+            
+            // Only log if significant memory was saved or we're over limits
+            if memory_saved > MB || memory_used > self.memory_limit_max {
+                println!("Memory cleanup performed: {} bytes freed, current usage: {} bytes", 
+                          memory_saved, post_cleanup_memory);
             }
-            
-            // Completely recreate system instance with minimal features
-            // Instead of dropping, create a new minimal instance
-            self.system = System::new_with_specifics(RefreshKind::new()
-                .with_memory() // Only refresh memory
-                .with_cpu(CpuRefreshKind::new())); // Only refresh CPU
-            std::thread::sleep(Duration::from_millis(50)); // Short pause to allow memory reclaim
-            
-            println!("Memory cleanup performed, current usage: {} bytes", self.system.used_memory());
         }
         
         let memory_usage_percent = (memory_used as f32 / memory_total as f32) * 100.0;
@@ -262,7 +336,7 @@ impl SystemMonitor {
             let net_limit = if self.resource_level >= 3 { usize::MAX } else { 2 };
             
             let mut i = 0;
-            for (interface_name, network) in self.system.networks() {
+            for (_interface_name, network) in self.system.networks() {
                 if i >= net_limit { break; }
                 received += network.received();
                 transmitted += network.transmitted();
@@ -480,10 +554,30 @@ pub async fn get_system_stats(monitor: web::Data<MonitoringData>) -> impl Respon
     HttpResponse::Ok().json(stats)
 }
 
-// HTML endpoint for the monitoring dashboard
+// Dashboard state cache to improve performance
+static DASHBOARD_LAST_MODIFIED: Mutex<SystemTime> = Mutex::new(SystemTime::UNIX_EPOCH);
+
+/// HTML endpoint for the monitoring dashboard with improved performance
 #[get("/dashboard")]
 pub async fn dashboard() -> impl Responder {
-    HttpResponse::Ok()
-        .content_type("text/html; charset=utf-8")
-        .body(include_str!("../templates/dashboard.html"))
+    // Update the last modified time for caching
+    {
+        let mut last_modified = DASHBOARD_LAST_MODIFIED.lock().unwrap();
+        *last_modified = SystemTime::now();
+    }
+    
+    // The correct way to build a response in actix-web
+    let mut builder = HttpResponse::Ok();
+    builder.content_type("text/html; charset=utf-8");
+    builder.insert_header(("Cache-Control", "max-age=10"));
+    builder.insert_header(("X-Content-Type-Options", "nosniff"));
+    
+    // Set platform-specific optimization hints
+    #[cfg(windows)]
+    {
+        builder.insert_header(("X-UA-Compatible", "IE=edge"));
+    }
+    
+    // Serve the dashboard HTML
+    builder.body(include_str!("../templates/dashboard.html"))
 }

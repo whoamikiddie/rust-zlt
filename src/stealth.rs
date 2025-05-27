@@ -1,6 +1,6 @@
 use crate::config::SECRET_KEY;
 use crate::encryption::{ad30, ae31};
-use log::debug;
+// use log::debug; - removed unused import
 use rand::{Rng, thread_rng};
 use sha2::{Sha256, Digest};
 use std::fs;
