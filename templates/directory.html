@@ -12,6 +12,8 @@
         :root {
             --primary-color: #3b82f6;
             --primary-dark: #2563eb;
+            --secondary-color: #8b5cf6;
+            --tertiary-color: #06b6d4;
             --background-color: #0f172a;
             --card-background: #1e293b;
             --text-primary: #f8fafc;
@@ -20,8 +22,13 @@
             --hover-color: #1e40af;
             --success-color: #22c55e;
             --error-color: #ef4444;
+            --warning-color: #f59e0b;
+            --info-color: #0ea5e9;
             --gradient-start: #3b82f6;
             --gradient-end: #2563eb;
+            --glass-bg: rgba(30, 41, 59, 0.8);
+            --glass-border: rgba(255, 255, 255, 0.1);
+            --glass-shadow: rgba(0, 0, 0, 0.2);
         }
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: 'Inter', sans-serif; background: var(--background-color); color: var(--text-primary); line-height: 1.6; min-height: 100vh; }
@@ -46,19 +53,312 @@
         .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 6px 8px -1px rgba(59, 130, 246, 0.6); }
         .btn-icon { width: 20px; height: 20px; }
         .grid-container { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 1.5rem; }
-        .card { background: var(--card-background); border-radius: 1rem; padding: 1.5rem; transition: all 0.3s ease; border: 1px solid var(--border-color); display: flex; flex-direction: column; gap: 1.25rem; position: relative; overflow: hidden; }
+        .card { background: var(--card-background); border-radius: 1rem; padding: 1.5rem; transition: all 0.3s ease; border: 1px solid var(--border-color); display: flex; flex-direction: column; gap: 1.25rem; position: relative; overflow: hidden; min-height: 220px; }
         .card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: linear-gradient(135deg, var(--gradient-start), var(--gradient-end)); opacity: 0; transition: opacity 0.3s ease; z-index: 0; }
         .card:hover { transform: translateY(-4px); box-shadow: 0 8px 12px -1px rgba(0, 0, 0, 0.2); border-color: var(--primary-color); }
         .card:hover::before { opacity: 0.05; }
-        .card-header { display: flex; align-items: center; gap: 1rem; position: relative; z-index: 1; }
-        .card-icon { width: 48px; height: 48px; display: flex; align-items: center; justify-content: center; background: var(--background-color); border-radius: 0.75rem; color: var(--primary-color); transition: all 0.3s ease; }
+        .card-header { display: flex; align-items: flex-start; gap: 1rem; position: relative; z-index: 1; margin-bottom: 0.5rem; }
+        .card-icon { width: 48px; height: 48px; display: flex; align-items: center; justify-content: center; background: var(--background-color); border-radius: 0.75rem; color: var(--primary-color); transition: all 0.3s ease; flex-shrink: 0; }
         .card:hover .card-icon { transform: scale(1.1); box-shadow: 0 4px 6px -1px rgba(59, 130, 246, 0.3); }
         .icon { width: 28px; height: 28px; }
-        .card-title { color: var(--text-primary); text-decoration: none; font-weight: 500; font-size: 1.125rem; transition: color 0.3s ease; flex: 1; word-break: break-word; }
-        .card-title:hover { color: var(--primary-color); }
+        .card-title { color: var(--text-primary); text-decoration: none; font-weight: 500; font-size: 1.125rem; transition: color 0.3s ease; flex: 1; word-break: break-word; display: block; }
+        a.card-title:hover { color: var(--primary-color); }
         .card-actions { display: flex; gap: 1rem; margin-top: auto; position: relative; z-index: 1; }
-        .card-meta { font-size: 0.875rem; color: var(--text-secondary); position: relative; z-index: 1; }
-        @media (max-width: 768px) { .container { padding: 1rem; } .header { padding: 1.5rem; } .title { font-size: 1.5rem; } .upload-form { flex-direction: column; } .btn { width: 100%; justify-content: center; } .grid-container { grid-template-columns: 1fr; } }
+        .card-meta { font-size: 0.875rem; color: var(--text-secondary); position: relative; z-index: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; margin-bottom: 0.5rem; }
+        .file-ext { position: absolute; right: -4px; top: -4px; background-color: var(--primary-color); color: white; border-radius: 4px; font-size: 0.6rem; font-weight: bold; padding: 2px 4px; letter-spacing: 0.5px; text-transform: uppercase; box-shadow: 0 2px 4px rgba(0,0,0,0.2); }
+        .download-btn, .preview-btn { position: relative; overflow: hidden; }
+        .download-btn:active, .preview-btn:active { transform: translateY(2px); }
+        
+        /* Add ripple effect for better touch feedback */
+        @keyframes ripple {
+            0% {
+                transform: scale(0);
+                opacity: 0.6;
+            }
+            100% {
+                transform: scale(20);
+                opacity: 0;
+            }
+        }
+        
+        .download-btn::after, .preview-btn::after {
+            content: '';
+            display: block;
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            top: 0;
+            left: 0;
+            pointer-events: none;
+            background-image: radial-gradient(circle, rgba(255, 255, 255, 0.3) 10%, transparent 10.01%);
+            background-repeat: no-repeat;
+            background-position: 50%;
+            transform: scale(10, 10);
+            opacity: 0;
+            transition: transform .5s, opacity 1s;
+        }
+        
+        .download-btn:active::after, .preview-btn:active::after {
+            transform: scale(0, 0);
+            opacity: .3;
+            transition: 0s;
+        }
+        /* Remove any possible duplicate metadata elements */
+        .duplicate-meta { display: none !important; }
+        /* Modern breadcrumb styles */
+        .breadcrumb {
+            display: flex;
+            align-items: center;
+            flex-wrap: nowrap;
+            white-space: nowrap;
+            overflow-x: auto;
+            padding: 0.75rem 0;
+            scrollbar-width: thin;
+            scrollbar-color: var(--primary-color) transparent;
+            max-width: 100%;
+            -webkit-overflow-scrolling: touch;
+            position: relative;
+        }
+        
+        .breadcrumb::-webkit-scrollbar {
+            height: 4px;
+        }
+        
+        .breadcrumb::-webkit-scrollbar-thumb {
+            background-color: var(--primary-color);
+            border-radius: 4px;
+        }
+        
+        .breadcrumb-item {
+            display: flex;
+            align-items: center;
+            flex-shrink: 0;
+            position: relative;
+        }
+        
+        .breadcrumb-link {
+            padding: 0.4rem 0.75rem;
+            border-radius: 0.5rem;
+            background-color: rgba(59, 130, 246, 0.1);
+            transition: all 0.3s ease;
+            font-weight: 500;
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+            display: flex;
+            align-items: center;
+        }
+        
+        .breadcrumb-link:hover {
+            background-color: rgba(59, 130, 246, 0.2);
+            transform: translateY(-1px);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        
+        .breadcrumb-current {
+            padding: 0.4rem 0.75rem;
+            border-radius: 0.5rem;
+            background-color: var(--primary-color);
+            color: white;
+            font-weight: 500;
+            max-width: 300px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            display: inline-block;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+        
+        .breadcrumb-separator {
+            color: var(--text-secondary);
+            opacity: 0.7;
+            margin: 0 0.25rem;
+            flex-shrink: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 24px;
+        }
+        
+        /* Standard mobile devices */
+        /* Navigation bar */
+        .navbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1rem 2rem;
+            background: var(--card-background);
+            border-bottom: 1px solid var(--border-color);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+        
+        .navbar-brand {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            text-decoration: none;
+            color: var(--text-primary);
+        }
+        
+        .navbar-logo {
+            height: 32px;
+            width: 32px;
+        }
+        
+        .navbar-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+        }
+        
+        .navbar-links {
+            display: flex;
+            gap: 1.5rem;
+        }
+        
+        .navbar-link {
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-weight: 500;
+            transition: color 0.3s ease;
+            position: relative;
+        }
+        
+        .navbar-link:hover {
+            color: var(--primary-color);
+        }
+        
+        .navbar-link.active {
+            color: var(--primary-color);
+        }
+        
+        .navbar-link.active::after {
+            content: '';
+            position: absolute;
+            bottom: -4px;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: var(--primary-color);
+            border-radius: 2px;
+        }
+        
+        @media (max-width: 768px) { 
+            .container { padding: 1rem; } 
+            .header { padding: 1.5rem; flex-direction: column; } 
+            .header-content { width: 100%; justify-content: flex-start; } 
+            .title { font-size: 1.5rem; } 
+            .upload-form { flex-direction: column; } 
+            .navbar { padding: 1rem; flex-direction: column; gap: 1rem; }
+            .navbar-links { width: 100%; justify-content: space-around; }
+            .btn { width: 100%; justify-content: center; min-height: 3rem; } /* Taller buttons for touch */
+            .grid-container { grid-template-columns: 1fr; } 
+            .card { padding: 1.25rem; display: flex; flex-direction: column; min-height: 240px; } /* Increased min-height */
+            .card-icon { width: 40px; height: 40px; position: relative; } 
+            .file-ext { font-size: 0.5rem; right: -6px; top: -6px; padding: 1px 3px; }
+            .path-info { flex-direction: column; align-items: flex-start; } 
+            .breadcrumb { margin-bottom: 0.5rem; width: 100%; overflow-x: auto; padding-bottom: 0.5rem; white-space: nowrap; scroll-behavior: smooth; -webkit-overflow-scrolling: touch; }
+            .breadcrumb-item { display: inline-block; }
+            .breadcrumb-current { word-break: break-all; display: inline; }
+            .breadcrumb-separator { display: inline-block; }
+            .stats { margin-top: 0.5rem; } 
+            .toast { left: 1rem; right: 1rem; bottom: 1rem; } 
+            .theme-toggle { bottom: 1rem; left: 1rem; transform: scale(0.9); } 
+            .upload-status { width: 90%; } 
+            .card-header { margin-bottom: 0.75rem; }
+            .card-meta { margin-bottom: 1.5rem; font-size: 0.8rem; } /* More margin */
+            
+            /* Enhanced mobile buttons for better touch interaction */
+            .card-actions { 
+                flex-wrap: wrap; 
+                gap: 0.5rem; 
+                margin-top: auto; 
+                position: absolute; 
+                bottom: 1.25rem; 
+                left: 1.25rem; 
+                right: 1.25rem; 
+                display: flex;
+                flex-direction: column;
+                justify-content: center;
+                align-items: stretch;
+            } 
+            
+            /* Better mobile button styling */
+            .download-btn, .preview-btn {
+                margin-bottom: 0.375rem; 
+                min-height: 3.5rem;
+                width: 100%;
+                font-size: 1rem;
+                font-weight: 600;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                border-radius: 0.75rem;
+                box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+                padding: 0.875rem 1rem;
+                margin-left: 0;
+                margin-right: 0;
+            }
+            
+            /* Stronger visual distinction between buttons */
+            .download-btn {
+                background-color: var(--primary-color);
+                color: white;
+                order: 1; /* Ensure download is first on mobile */
+                margin-bottom: 0.5rem;
+            }
+            
+            .preview-btn {
+                background-color: rgba(255, 255, 255, 0.1);
+                border: 1px solid rgba(255, 255, 255, 0.2);
+                color: var(--text-primary);
+                order: 2;
+            }
+            
+            /* Larger icons for buttons with better alignment */
+            .download-btn svg, .preview-btn svg {
+                width: 1.25rem;
+                height: 1.25rem;
+                margin-right: 0.5rem;
+                flex-shrink: 0;
+            }
+            
+            .file-input { min-height: 3.5rem; } /* Taller input for better touch target */
+            .file-input::before { content: 'Tap to select files'; position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); color: var(--text-secondary); pointer-events: none; }
+            
+            /* Remove possible duplicate metadata */
+            .duplicate-meta, div[class*='Type:'] { display: none !important; }
+        }
+        
+        /* Specific touch improvements for all touch devices regardless of size */
+        @media (pointer: coarse) {
+            .card-title { padding: 0.5rem 0; } /* Larger tap target for title */
+            .breadcrumb-link { padding: 0.5rem 0; display: inline-block; } /* Larger tap target for breadcrumb */
+            .card-actions .btn { padding-top: 0.75rem; padding-bottom: 0.75rem; } /* Larger touch area */
+            .toast { padding: 1rem; } /* Easier to read on mobile */
+        }
+        
+        /* Small mobile devices */
+        @media (max-width: 480px) {
+            .container { padding: 0.75rem; }
+            .header { padding: 1.25rem; }
+            .title { font-size: 1.25rem; }
+            .subtitle { font-size: 0.875rem; }
+            .card { padding: 1rem; }
+            .card-title { font-size: 1rem; }
+            .btn { padding: 0.75rem 1.25rem; font-size: 0.875rem; }
+            .card-meta { font-size: 0.75rem; }
+            .theme-toggle { transform: scale(0.8); opacity: 0.8; } /* Smaller theme toggle */
+            .upload-section { padding: 1.25rem; } /* Smaller padding */
+            .gallery-item { width: calc(100% - 0.5rem); height: 180px; } /* Full width gallery items */
+        }
+        
+        /* Touch-friendly improvements */
+        @media (pointer: coarse) {
+            /* Larger touch targets */
+            .card-title { padding: 0.25rem 0; }
+            .breadcrumb-link { padding: 0.5rem 0; display: inline-block; }
+            .file-input-wrapper { position: relative; }
+            .file-input-wrapper::after { content: 'Tap to select files'; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: var(--text-secondary); pointer-events: none; }
+            .file-input:not(:focus):not(:active) { color: transparent; }
+        }
         .upload-section.drag-over { border-color: var(--success-color); background: rgba(34, 197, 94, 0.1); transform: scale(1.02); }
         .toast { position: fixed; bottom: 2rem; right: 2rem; padding: 1rem 1.5rem; border-radius: 1rem; background: var(--card-background); color: var(--text-primary); box-shadow: 0 8px 12px -1px rgba(0, 0, 0, 0.2); display: flex; align-items: center; gap: 0.75rem; z-index: 1000; animation: slideIn 0.3s ease; border: 1px solid var(--border-color); }
         @keyframes slideIn { from { transform: translateX(100%) translateY(1rem); opacity: 0; } to { transform: translateX(0) translateY(0); opacity: 1; } }
@@ -74,9 +374,44 @@
         .upload-status.visible { opacity: 1; }
         .upload-status-icon { width: 16px; height: 16px; animation: spin 1s linear infinite; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-        .preview-container { max-width: 800px; margin: 2rem auto; }
-        .preview-image { max-width: 100%; height: auto; }
-        .preview-player { width: 100%; max-width: 800px; }
+        .preview-container { max-width: 800px; margin: 2rem auto; position: relative; background: var(--glass-bg); padding: 1.5rem; border-radius: 1rem; backdrop-filter: blur(10px); border: 1px solid var(--glass-border); box-shadow: 0 8px 32px var(--glass-shadow); }
+        .preview-image { max-width: 100%; height: auto; border-radius: 0.5rem; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); transition: transform 0.3s ease; }
+        .preview-image:hover { transform: scale(1.01); }
+        .preview-player { width: 100%; max-width: 800px; border-radius: 0.5rem; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); }
+        .preview-text { white-space: pre-wrap; font-family: 'Consolas', 'Monaco', monospace; padding: 1rem; background: rgba(15, 23, 42, 0.6); border-radius: 0.5rem; border: 1px solid var(--border-color); max-height: 500px; overflow-y: auto; }
+        .preview-pdf { width: 100%; height: 600px; border: none; }
+        .preview-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; }
+        .preview-title { font-size: 1.25rem; font-weight: 600; overflow: hidden; text-overflow: ellipsis; }
+        .preview-actions { display: flex; gap: 0.5rem; }
+        .preview-btn { background: var(--card-background); border: 1px solid var(--border-color); color: var(--text-primary); padding: 0.5rem 1rem; border-radius: 0.5rem; cursor: pointer; transition: all 0.3s ease; display: flex; align-items: center; gap: 0.5rem; }
+        .preview-btn:hover { background: var(--primary-dark); border-color: var(--primary-color); }
+        
+        /* Theme toggle */
+        .theme-toggle { position: fixed; bottom: 2rem; left: 2rem; background: var(--glass-bg); border-radius: 2rem; padding: 0.5rem; box-shadow: 0 4px 12px var(--glass-shadow); backdrop-filter: blur(10px); border: 1px solid var(--glass-border); z-index: 100; display: flex; align-items: center; gap: 0.5rem; }
+        .theme-btn { background: transparent; border: none; color: var(--text-secondary); padding: 0.5rem; border-radius: 50%; cursor: pointer; transition: all 0.3s ease; }
+        .theme-btn.active { color: var(--text-primary); background: var(--primary-color); }
+        
+        /* File cards improvements */
+        .file-type-badge { position: absolute; top: 0.5rem; right: 0.5rem; padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-size: 0.7rem; font-weight: 600; text-transform: uppercase; background: var(--glass-bg); backdrop-filter: blur(5px); }
+        .file-type-image { background: rgba(59, 130, 246, 0.2); color: var(--primary-color); }
+        .file-type-video { background: rgba(139, 92, 246, 0.2); color: var(--secondary-color); }
+        .file-type-audio { background: rgba(239, 68, 68, 0.2); color: var(--error-color); }
+        .file-type-pdf { background: rgba(245, 158, 11, 0.2); color: var(--warning-color); }
+        .breadcrumb-link { color: var(--text-secondary); text-decoration: none; transition: color 0.3s ease; }
+        .breadcrumb-link:hover { color: var(--primary-color); }
+        .breadcrumb-current { color: var(--text-primary); font-weight: 500; }
+        
+        /* Loading spinner */
+        .loading-spinner { display: inline-block; width: 1.5rem; height: 1.5rem; border: 2px solid rgba(255,255,255,0.3); border-radius: 50%; border-top-color: var(--primary-color); animation: spin 1s ease-in-out infinite; }
+        
+        /* Image gallery view */
+        .gallery-view { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+        .gallery-item { width: calc(25% - 0.5rem); height: 150px; border-radius: 0.5rem; overflow: hidden; position: relative; }
+        .gallery-img { width: 100%; height: 100%; object-fit: cover; transition: transform 0.3s ease; }
+        .gallery-item:hover .gallery-img { transform: scale(1.05); }
+        .gallery-overlay { position: absolute; bottom: 0; left: 0; right: 0; padding: 0.5rem; background: var(--glass-bg); backdrop-filter: blur(5px); color: white; font-size: 0.75rem; opacity: 0; transition: opacity 0.3s ease; }
+        .gallery-item:hover .gallery-overlay { opacity: 1; }
+        @media (max-width: 768px) { .gallery-item { width: calc(50% - 0.5rem); } }
     </style>
 </head>
 <body>
@@ -88,6 +423,38 @@
             <path fill="currentColor" d="M12,4V2A10,10 0 0,0 2,12H4A8,8 0 0,1 12,4Z"/>
         </svg>
         <span id="uploadStatusText">Uploading files...</span>
+    </div>
+    
+    <!-- Navigation Bar -->
+    <nav class="navbar">
+        <a href="/" class="navbar-brand">
+            <svg class="navbar-logo" viewBox="0 0 24 24">
+                <path fill="currentColor" d="M20,18H4V8H20M20,6H12L10,4H4C2.89,4 2,4.89 2,6V18A2,2 0 0,0 4,20H20A2,2 0 0,0 22,18V8C22,6.89 21.1,6 20,6Z"/>
+            </svg>
+            <span class="navbar-title">Z Stealth</span>
+        </a>
+        <div class="navbar-links">
+            <a href="/" class="navbar-link active">Files</a>
+            <a href="/dashboard" class="navbar-link">Dashboard</a>
+        </div>
+    </nav>
+    
+    <div class="theme-toggle" id="themeToggle">
+        <button id="lightTheme" class="theme-btn" title="Light Mode">
+            <svg viewBox="0 0 24 24" width="16" height="16">
+                <path fill="currentColor" d="M12,7A5,5 0 0,1 17,12A5,5 0 0,1 12,17A5,5 0 0,1 7,12A5,5 0 0,1 12,7M12,9A3,3 0 0,0 9,12A3,3 0 0,0 12,15A3,3 0 0,0 15,12A3,3 0 0,0 12,9M12,2L14.39,5.42C13.65,5.15 12.84,5 12,5C11.16,5 10.35,5.15 9.61,5.42L12,2M3.34,7L7.5,6.65C6.9,7.16 6.36,7.78 5.94,8.5C5.5,9.24 5.25,10 5.11,10.79L3.34,7M3.36,17L5.12,13.23C5.26,14 5.53,14.78 5.95,15.5C6.37,16.24 6.91,16.86 7.5,17.37L3.36,17M20.65,7L18.88,10.79C18.74,10 18.47,9.23 18.05,8.5C17.63,7.78 17.1,7.15 16.5,6.64L20.65,7M20.64,17L16.5,17.36C17.09,16.85 17.62,16.22 18.04,15.5C18.46,14.77 18.73,14 18.87,13.21L20.64,17M12,22L9.59,18.56C10.33,18.83 11.14,19 12,19C12.82,19 13.63,18.83 14.37,18.56L12,22Z" />
+            </svg>
+        </button>
+        <button id="darkTheme" class="theme-btn active" title="Dark Mode">
+            <svg viewBox="0 0 24 24" width="16" height="16">
+                <path fill="currentColor" d="M17.75,4.09L15.22,6.03L16.13,9.09L13.5,7.28L10.87,9.09L11.78,6.03L9.25,4.09L12.44,4L13.5,1L14.56,4L17.75,4.09M21.25,11L19.61,12.25L20.2,14.23L18.5,13.06L16.8,14.23L17.39,12.25L15.75,11L17.81,10.95L18.5,9L19.19,10.95L21.25,11M18.97,15.95C19.8,15.87 20.69,17.05 20.16,17.8C19.84,18.25 19.5,18.67 19.08,19.07C15.17,23 8.84,23 4.94,19.07C1.03,15.17 1.03,8.83 4.94,4.93C5.34,4.53 5.76,4.17 6.21,3.85C6.96,3.32 8.14,4.21 8.06,5.04C7.79,7.9 8.75,10.87 10.95,13.06C13.14,15.26 16.1,16.22 18.97,15.95M17.33,17.97C14.5,17.81 11.7,16.64 9.53,14.5C7.36,12.31 6.2,9.5 6.04,6.68C3.23,9.82 3.34,14.64 6.35,17.66C9.37,20.67 14.19,20.78 17.33,17.97Z" />
+            </svg>
+        </button>
+        <button id="systemTheme" class="theme-btn" title="System Theme">
+            <svg viewBox="0 0 24 24" width="16" height="16">
+                <path fill="currentColor" d="M12,18A6,6 0 0,1 6,12A6,6 0 0,1 12,6A6,6 0 0,1 18,12A6,6 0 0,1 12,18M20,15.31L23.31,12L20,8.69V4H15.31L12,0.69L8.69,4H4V8.69L0.69,12L4,15.31V20H8.69L12,23.31L15.31,20H20V15.31Z" />
+            </svg>
+        </button>
     </div>
     <div class="container">
         <header class="header">
@@ -105,10 +472,18 @@
             <svg class="path-icon" viewBox="0 0 24 24">
                 <path fill="currentColor" d="M10,4H4C2.89,4 2,4.89 2,6V18A2,2 0 0,0 4,20H20A2,2 0 0,0 22,18V8C22,6.89 21.1,6 20,6H12L10,4Z"/>
             </svg>
-            Current Path: {{display_path}}
-            <div class="stats">
-                <span class="stat">📁 {{directories_count}} folders</span>
-                <span class="stat">📄 {{files_count}} files</span>
+            <div style="width: 100%; overflow: hidden;">
+                <nav class="breadcrumb" aria-label="breadcrumb">
+                    <div class="breadcrumb-item">
+                        <a href="/?p=/" class="breadcrumb-link">Home</a>
+                    </div>
+                    <!-- Dynamic breadcrumb segments generated in file_server.rs -->
+                    {{breadcrumb_segments}}
+                </nav>
+                <div class="stats">
+                    <span class="stat"><svg style="width:16px;height:16px;vertical-align:middle;margin-right:4px" viewBox="0 0 24 24"><path fill="currentColor" d="M10,4H4C2.89,4 2,4.89 2,6V18A2,2 0 0,0 4,20H20A2,2 0 0,0 22,18V8C22,6.89 21.1,6 20,6H12L10,4Z"/></svg> {{directories_count}} folders</span>
+                    <span class="stat"><svg style="width:16px;height:16px;vertical-align:middle;margin-right:4px" viewBox="0 0 24 24"><path fill="currentColor" d="M13,9V3.5L18.5,9M6,2C4.89,2 4,2.89 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2H6Z"/></svg> {{files_count}} files</span>
+                </div>
             </div>
         </div>
         <div class="upload-section" id="dropZone">
@@ -233,6 +608,148 @@
                 uploadButton.textContent = 'Upload ' + files.length + ' file' + (files.length === 1 ? '' : 's');
             } else {
                 uploadButton.textContent = 'Upload Files';
+            }
+        });
+    
+        // Theme toggle functionality
+        const themeToggle = document.getElementById('themeToggle');
+        const lightTheme = document.getElementById('lightTheme');
+        const darkTheme = document.getElementById('darkTheme');
+        const systemTheme = document.getElementById('systemTheme');
+        const root = document.documentElement;
+        
+        // Theme definitions
+        const themes = {
+            light: {
+                '--background-color': '#f8fafc',
+                '--card-background': '#ffffff',
+                '--text-primary': '#0f172a',
+                '--text-secondary': '#64748b',
+                '--border-color': '#e2e8f0',
+                '--glass-bg': 'rgba(255, 255, 255, 0.8)',
+                '--glass-border': 'rgba(255, 255, 255, 0.2)',
+                '--glass-shadow': 'rgba(0, 0, 0, 0.1)'
+            },
+            dark: {
+                '--background-color': '#0f172a',
+                '--card-background': '#1e293b',
+                '--text-primary': '#f8fafc',
+                '--text-secondary': '#94a3b8',
+                '--border-color': '#334155',
+                '--glass-bg': 'rgba(30, 41, 59, 0.8)',
+                '--glass-border': 'rgba(255, 255, 255, 0.1)',
+                '--glass-shadow': 'rgba(0, 0, 0, 0.2)'
+            }
+        };
+        
+        // Check for saved theme preference or get system preference
+        function getThemePreference() {
+            const savedTheme = localStorage.getItem('zltTheme');
+            if (savedTheme) {
+                return savedTheme;
+            }
+            return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+        }
+        
+        // Apply theme
+        function applyTheme(theme) {
+            const themeVars = themes[theme] || themes.dark;
+            Object.entries(themeVars).forEach(([property, value]) => {
+                root.style.setProperty(property, value);
+            });
+            
+            // Update active button state
+            [lightTheme, darkTheme, systemTheme].forEach(btn => btn.classList.remove('active'));
+            if (theme === 'light') {
+                lightTheme.classList.add('active');
+            } else if (theme === 'dark') {
+                darkTheme.classList.add('active');
+            } else {
+                systemTheme.classList.add('active');
+            }
+            
+            localStorage.setItem('zltTheme', theme);
+        }
+        
+        // Initial theme setup
+        applyTheme(getThemePreference());
+        
+        // Theme toggle event listeners
+        lightTheme.addEventListener('click', () => applyTheme('light'));
+        darkTheme.addEventListener('click', () => applyTheme('dark'));
+        systemTheme.addEventListener('click', () => {
+            localStorage.removeItem('zltTheme');
+            applyTheme(window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+        });
+        
+        // Enhanced file type detection and badges
+        function addFileTypeBadges() {
+            const fileCards = document.querySelectorAll('.file-card');
+            fileCards.forEach(card => {
+                const filename = card.querySelector('.card-title').textContent.trim();
+                const extension = filename.split('.').pop().toLowerCase();
+                let type = 'document';
+                let badge = '';
+                
+                // Determine file type
+                if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp'].includes(extension)) {
+                    type = 'image';
+                    badge = '<span class="file-type-badge file-type-image">Image</span>';
+                } else if (['mp4', 'webm', 'mov', 'avi', 'mkv'].includes(extension)) {
+                    type = 'video';
+                    badge = '<span class="file-type-badge file-type-video">Video</span>';
+                } else if (['mp3', 'wav', 'ogg', 'flac', 'm4a'].includes(extension)) {
+                    type = 'audio';
+                    badge = '<span class="file-type-badge file-type-audio">Audio</span>';
+                } else if (extension === 'pdf') {
+                    type = 'pdf';
+                    badge = '<span class="file-type-badge file-type-pdf">PDF</span>';
+                } else if (['zip', 'rar', '7z', 'tar', 'gz'].includes(extension)) {
+                    type = 'archive';
+                    badge = '<span class="file-type-badge file-type-archive">Archive</span>';
+                } else if (['html', 'css', 'js', 'json', 'py', 'java', 'c', 'cpp', 'rs', 'go', 'php', 'rb'].includes(extension)) {
+                    type = 'code';
+                    badge = '<span class="file-type-badge file-type-code">Code</span>';
+                }
+                
+                card.dataset.fileType = type;
+                card.innerHTML += badge;
+                
+                // Add file details tooltip
+                const metaText = card.querySelector('.card-meta').textContent;
+                card.innerHTML += `<div class="file-details">Type: ${type}<br>${metaText}</div>`;
+            });
+        }
+        
+        // Call on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            addFileTypeBadges();
+            
+            // Generate breadcrumb based on current path
+            const currentPath = '{{path}}';
+            if (currentPath && currentPath !== '/') {
+                const pathParts = currentPath.split('/').filter(part => part);
+                const breadcrumb = document.querySelector('.breadcrumb');
+                
+                // Remove the current breadcrumb item (it will be regenerated)
+                breadcrumb.innerHTML = '<div class="breadcrumb-item"><a href="/?p=/" class="breadcrumb-link">Home</a></div>';
+                
+                let currentPathBuilt = '';
+                pathParts.forEach((part, index) => {
+                    currentPathBuilt += '/' + part;
+                    const isLast = index === pathParts.length - 1;
+                    
+                    const item = document.createElement('div');
+                    item.className = 'breadcrumb-item';
+                    
+                    if (isLast) {
+                        item.innerHTML = `<span class="breadcrumb-current">${part}</span>`;
+                    } else {
+                        item.innerHTML = `<a href="/?p=${encodeURIComponent(currentPathBuilt)}" class="breadcrumb-link">${part}</a>`;
+                    }
+                    
+                    breadcrumb.appendChild(item);
+                });
             }
         });
     </script>

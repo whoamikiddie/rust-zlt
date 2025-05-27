@@ -284,25 +284,255 @@ pub async fn preview(
                     return fs.error_page(500, "Error reading file");
                 }
                 
+                // Check for download parameter or header
+                if req.headers().contains_key("download") || req.uri().to_string().contains("download=") {
+                    // If download is requested, serve file for download
+                    let filename = Path::new(file_path).file_name()
+                        .and_then(|f| f.to_str())
+                        .unwrap_or("download");
+                        
+                    return HttpResponse::Ok()
+                        .content_type("application/octet-stream")
+                        .append_header(("Content-Disposition", format!("attachment; filename=\"{}\"", filename)))
+                        .body(content);
+                }
+                
+                // Normal preview handling
+                let file_name = Path::new(file_path).file_name()
+                    .and_then(|f| f.to_str())
+                    .unwrap_or("file");
+                
+                // Get file extension
+                let ext = Path::new(file_path)
+                    .extension()
+                    .and_then(|e| e.to_str())
+                    .map(|e| e.to_lowercase())
+                    .unwrap_or_default();
+                
+                // Media files: serve directly
                 if content_type.starts_with("image/") || 
                    content_type.starts_with("video/") || 
                    content_type.starts_with("audio/") {
-                    // For media files, serve directly
                     return HttpResponse::Ok()
                         .content_type(content_type)
+                        .append_header(("Content-Disposition", "inline"))
                         .body(content);
-                } else {
-                    // For text files, show preview
-                    let preview_size = std::cmp::min(100, content.len());
+                }
+                // PDF files: show in PDF viewer
+                else if content_type == "application/pdf" {
+                    return HttpResponse::Ok()
+                        .content_type(content_type)
+                        .append_header(("Content-Disposition", format!("inline; filename=\"{}\"", file_name)))
+                        .body(content);
+                }
+                // HTML files: render as web pages
+                else if ext == "html" || ext == "htm" {
+                    // Add a sandbox header for security
+                    let iframe_sandbox = "allow-scripts allow-same-origin";
+                    let html_content = String::from_utf8_lossy(&content);
+                    let encoded_html = urlencoding::encode(&html_content);
+                    let escaped_html = htmlescape::encode_minimal(&html_content);
+                    
+                    // Create a container page that renders the HTML file in a sandboxed iframe
+                    return HttpResponse::Ok()
+                        .content_type("text/html; charset=utf-8")
+                        .body(format!(r##"<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HTML Preview: {}</title>
+    <style>
+        body {{ background: #1e293b; color: #f8fafc; font-family: sans-serif; padding: 1rem; margin: 0; }}
+        .preview-header {{ display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; padding: 0.5rem 1rem; background: rgba(15, 23, 42, 0.8); border-radius: 0.5rem; }}
+        .preview-title {{ font-size: 1.2rem; font-weight: bold; }}
+        .preview-info {{ font-size: 0.9rem; opacity: 0.7; }}
+        .preview-actions {{ display: flex; gap: 0.5rem; }}
+        .preview-actions a {{ background: #3b82f6; color: white; text-decoration: none; padding: 0.5rem 1rem; border-radius: 0.25rem; }}
+        .preview-iframe-container {{ position: relative; width: 100%; height: calc(100vh - 80px); border-radius: 0.5rem; overflow: hidden; background: white; }}
+        .preview-iframe {{ width: 100%; height: 100%; border: none; }}
+        .preview-source {{ margin: 0; padding: 1rem; background: #282c34; color: #abb2bf; overflow: auto; height: 100%; border-radius: 0.5rem; white-space: pre-wrap; }}
+    </style>
+</head>
+<body>
+    <div class="preview-header">
+        <div>
+            <div class="preview-title">{}</div>
+            <div class="preview-info">{} bytes - HTML document</div>
+        </div>
+        <div class="preview-actions">
+            <a href="/?p={}">Back to folder</a>
+            <a href="/download?p={}">Download</a>
+            <a href="#" id="toggleView">View Source</a>
+        </div>
+    </div>
+    <div class="preview-iframe-container" id="previewContainer">
+        <iframe src="data:text/html;charset=utf-8,{}" class="preview-iframe" sandbox="{}" id="previewFrame"></iframe>
+    </div>
+    <script>
+        const toggleBtn = document.getElementById('toggleView');
+        const container = document.getElementById('previewContainer');
+        let showingSource = false;
+        
+        toggleBtn.addEventListener('click', function(e) {{
+            e.preventDefault();
+            if (showingSource) {{
+                // Switch to rendered view
+                container.innerHTML = '<iframe src="data:text/html;charset=utf-8,{}" class="preview-iframe" sandbox="{}" id="previewFrame"></iframe>';
+                toggleBtn.textContent = 'View Source';
+            }} else {{
+                // Switch to source code view
+                container.innerHTML = '<pre class="preview-source"><code>{}</code></pre>';
+                toggleBtn.textContent = 'View Rendered';
+            }}
+            showingSource = !showingSource;
+        }});
+    </script>
+</body>
+</html>"##, 
+                        file_name, // Preview title
+                        file_name, // File name
+                        content.len(), // File size in bytes
+                        Path::new(file_path).parent().unwrap_or(Path::new("/")).to_string_lossy(), // Back link
+                        urlencoding::encode(file_path), // Download link
+                        encoded_html, // HTML content for iframe
+                        iframe_sandbox, // Sandbox attributes
+                        encoded_html, // HTML content for iframe (toggle function)
+                        iframe_sandbox, // Sandbox attributes for toggle function
+                        escaped_html // Escaped HTML for source view
+                    ));
+                }
+                // Code and text files: show syntax highlighted preview
+                else if content_type.starts_with("text/") || 
+                        ["js", "py", "rs", "c", "cpp", "h", "java", "go", "rb", "php", "ts", "sh", "css", "json", "xml", "yaml", "yml", "toml"].contains(&ext.as_str()) {
+                    // For text files, show preview with better size limit
+                    let preview_size = std::cmp::min(content.len(), 100 * 1024); // Limit to 100KB for large text files
                     let preview = if let Ok(text) = String::from_utf8(content[..preview_size].to_vec()) {
-                        text
+                        if text.len() < content.len() {
+                            format!("{} [truncated - file too large to display completely]", text)
+                        } else {
+                            text
+                        }
                     } else {
                         "Binary content (preview not available)".to_string()
                     };
                     
+                    // Create syntax-highlighted preview based on file type
+                    let lang_class = match ext.as_str() {
+                        "js" => "javascript",
+                        "py" => "python",
+                        "rs" => "rust",
+                        "c" | "cpp" | "h" => "c",
+                        "java" => "java",
+                        "go" => "go",
+                        "rb" => "ruby",
+                        "php" => "php",
+                        "ts" => "typescript",
+                        "sh" => "bash",
+                        "html" => "html",
+                        "css" => "css",
+                        "json" => "json",
+                        "xml" => "xml",
+                        "yaml" | "yml" => "yaml",
+                        "toml" => "toml",
+                        _ => "",
+                    };
+                    
+                    // Return text preview with file info
                     return HttpResponse::Ok()
-                        .content_type("text/plain; charset=utf-8")
-                        .body(preview);
+                        .content_type("text/html; charset=utf-8")
+                        .body(format!(r#"<!DOCTYPE html>
+                        <html lang="en">
+                        <head>
+                            <meta charset="UTF-8">
+                            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                            <title>Preview: {}</title>
+                            <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/styles/atom-one-dark.min.css">
+                            <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/highlight.min.js"></script>
+                            <style>
+                                body {{ background: #1e293b; color: #f8fafc; font-family: monospace; padding: 1rem; margin: 0; }}
+                                pre {{ margin: 0; padding: 1rem; border-radius: 0.5rem; max-height: 80vh; overflow: auto; }}
+                                .preview-header {{ display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }}
+                                .preview-title {{ font-size: 1.2rem; font-weight: bold; }}
+                                .preview-info {{ font-size: 0.9rem; opacity: 0.7; }}
+                                .preview-actions {{ display: flex; gap: 0.5rem; }}
+                                .preview-actions a {{ background: #3b82f6; color: white; text-decoration: none; padding: 0.5rem 1rem; border-radius: 0.25rem; }}
+                            </style>
+                        </head>
+                        <body>
+                            <div class="preview-header">
+                                <div>
+                                    <div class="preview-title">{}</div>
+                                    <div class="preview-info">{} bytes - {}</div>
+                                </div>
+                                <div class="preview-actions">
+                                    <a href="/?p={}">Back to folder</a>
+                                    <a href="/download?p={}">Download</a>
+                                </div>
+                            </div>
+                            <pre><code class="{}"><!-- -->{}</code></pre>
+                            <script>hljs.highlightAll();</script>
+                        </body>
+                        </html>
+                        "#, 
+                        file_name, // Preview title
+                        file_name, // File name
+                        content.len(), // File size in bytes
+                        content_type, // Content type
+                        Path::new(file_path).parent().unwrap_or(Path::new("/")).to_string_lossy(), // Back link
+                        urlencoding::encode(file_path), // Download link
+                        lang_class, // Language for syntax highlighting
+                        htmlescape::encode_minimal(&preview) // Escaped content
+                    ));
+                }
+                // Other files: show binary preview notice with download option
+                else {
+                    return HttpResponse::Ok()
+                        .content_type("text/html; charset=utf-8")
+                        .body(format!(r#"<!DOCTYPE html>
+                        <html lang="en">
+                        <head>
+                            <meta charset="UTF-8">
+                            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                            <title>Preview: {}</title>
+                            <style>
+                                body {{ background: #1e293b; color: #f8fafc; font-family: sans-serif; padding: 2rem; margin: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 80vh; text-align: center; }}
+                                .preview-container {{ background: rgba(15, 23, 42, 0.6); padding: 2rem; border-radius: 1rem; max-width: 600px; width: 100%; }}
+                                .preview-icon {{ font-size: 4rem; margin-bottom: 1.5rem; color: #3b82f6; }}
+                                .preview-title {{ font-size: 1.5rem; font-weight: bold; margin-bottom: 0.5rem; }}
+                                .preview-info {{ font-size: 1rem; opacity: 0.7; margin-bottom: 2rem; }}
+                                .preview-actions {{ display: flex; gap: 1rem; justify-content: center; }}
+                                .preview-btn {{ background: #3b82f6; color: white; text-decoration: none; padding: 0.75rem 1.5rem; border-radius: 0.5rem; font-weight: bold; display: inline-flex; align-items: center; transition: all 0.3s; }}
+                                .preview-btn:hover {{ transform: translateY(-2px); background: #2563eb; }}
+                                .preview-btn svg {{ width: 1.25rem; height: 1.25rem; margin-right: 0.5rem; }}
+                            </style>
+                        </head>
+                        <body>
+                            <div class="preview-container">
+                                <div class="preview-icon">📄</div>
+                                <div class="preview-title">{}</div>
+                                <div class="preview-info">{} bytes - {}</div>
+                                <div class="preview-actions">
+                                    <a href="/?p={}" class="preview-btn">
+                                        <svg viewBox="0 0 24 24"><path fill="currentColor" d="M20,11V13H8L13.5,18.5L12.08,19.92L4.16,12L12.08,4.08L13.5,5.5L8,11H20Z"/></svg>
+                                        Back to folder
+                                    </a>
+                                    <a href="/download?p={}" class="preview-btn">
+                                        <svg viewBox="0 0 24 24"><path fill="currentColor" d="M5,20H19V18H5M19,9H15V3H9V9H5L12,16L19,9Z"/></svg>
+                                        Download
+                                    </a>
+                                </div>
+                            </div>
+                        </body>
+                        </html>
+                        "#, 
+                        file_name, // Preview title
+                        file_name, // File name
+                        content.len(), // File size in bytes
+                        content_type, // Content type
+                        Path::new(file_path).parent().unwrap_or(Path::new("/")).to_string_lossy(), // Back link
+                        urlencoding::encode(file_path) // Download link
+                    ));
                 }
             },
             Err(_) => return fs.error_page(500, "Error opening file")
@@ -486,15 +716,48 @@ fn get_content_type(filename: &str) -> String {
 
 // Function to render the directory template (manually since we're using a modified version of Askama)
 fn render_directory_template(template: &DirectoryTemplate) -> String {
+    // Create a human-readable path for display
+    let decoded_path = urlencoding::decode(&template.display_path).unwrap_or_else(|_| template.display_path.clone().into());
+    
+    // Create breadcrumb segments
+    let path_segments = if decoded_path.is_empty() || decoded_path == "/" {
+        Vec::new()
+    } else {
+        let parts: Vec<String> = decoded_path.trim_matches('/')
+            .split('/')
+            .map(|s| s.to_string())
+            .collect();
+        parts
+    };
+    
+    // Build breadcrumb HTML
+    let mut breadcrumb_html = String::new();
+    let mut current_path = String::from("/");
+    
+    for (i, segment) in path_segments.iter().enumerate() {
+        current_path.push_str(segment);
+        if i < path_segments.len() - 1 {
+            current_path.push('/');
+            breadcrumb_html.push_str(&format!(r#"<div class="breadcrumb-item"><a href="/?p={}" class="breadcrumb-link">{}</a></div><span class="breadcrumb-separator">/</span>"#, 
+                urlencoding::encode(&current_path), segment));
+        } else {
+            breadcrumb_html.push_str(&format!(r#"<div class="breadcrumb-item"><span class="breadcrumb-current">{}</span></div>"#, segment));
+        }
+    }
+    
     let html = include_str!("../templates/directory.html")
         .replace("{{path}}", &urlencoding::encode(&template.path))
-        .replace("{{display_path}}", &template.display_path)
+        .replace("{{display_path}}", &decoded_path)
+        .replace("{{breadcrumb_segments}}", &breadcrumb_html)
         .replace("{{directories_count}}", &template.directories.len().to_string())
         .replace("{{files_count}}", &template.files.len().to_string());
 
     // Render directories and files
     let mut directories_html = String::new();
     for dir in &template.directories {
+        // Format date to be more compact
+        let date_display = dir.modified.split_whitespace().last().unwrap_or(&dir.modified);
+        
         directories_html.push_str(&format!(r#"
             <div class="card folder-card">
                 <div class="card-header">
@@ -502,12 +765,13 @@ fn render_directory_template(template: &DirectoryTemplate) -> String {
                         <svg class="icon" viewBox="0 0 24 24">
                             <path fill="currentColor" d="M20,18H4V8H20M20,6H12L10,4H4C2.89,4 2,4.89 2,6V18A2,2 0 0,0 4,20H20A2,2 0 0,0 22,18V8C22,6.89 21.1,6 20,6Z"/>
                         </svg>
+                        <span class="file-ext">DIR</span>
                     </div>
                     <a href="/?p={}" class="card-title">{}</a>
                 </div>
-                <div class="card-meta">Size: {} | Modified: {}</div>
+                <div class="card-meta">Folder • {}</div>
                 <div class="card-actions">
-                    <a href="/download_folder?p={}" class="btn btn-primary">
+                    <a href="/download_folder?p={}" class="btn btn-primary download-btn">
                         <svg class="btn-icon" viewBox="0 0 24 24">
                             <path fill="currentColor" d="M5,20H19V18H5M19,9H15V3H9V9H5L12,16L19,9Z"/>
                         </svg>
@@ -515,11 +779,27 @@ fn render_directory_template(template: &DirectoryTemplate) -> String {
                     </a>
                 </div>
             </div>
-        "#, urlencoding::encode(&dir.path), dir.name, dir.size, dir.modified, urlencoding::encode(&dir.path)));
+        "#, urlencoding::encode(&dir.path), dir.name, date_display, urlencoding::encode(&dir.path)));
     }
 
     let mut files_html = String::new();
     for file in &template.files {
+        // Get file extension to show file type badge
+        let extension = Path::new(&file.name)
+            .extension()
+            .and_then(|ext| ext.to_str())
+            .unwrap_or("");
+        
+        // Create a better display for the file size - keep it short
+        let size_display = if file.size.contains("Dir") {
+            "Folder".to_string()
+        } else {
+            file.size.replace(" bytes", "B").replace(" KB", "KB").replace(" MB", "MB")
+        };
+        
+        // Format date to be more compact
+        let date_display = file.modified.split_whitespace().last().unwrap_or(&file.modified);
+            
         files_html.push_str(&format!(r#"
             <div class="card file-card">
                 <div class="card-header">
@@ -527,22 +807,34 @@ fn render_directory_template(template: &DirectoryTemplate) -> String {
                         <svg class="icon" viewBox="0 0 24 24">
                             <path fill="currentColor" d="M13,9V3.5L18.5,9M6,2C4.89,2 4,2.89 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2H6Z"/>
                         </svg>
+                        {}
                     </div>
-                    <a href="/?p={}" class="card-title">{}</a>
+                    <span class="card-title">{}</span>
                 </div>
-                <div class="card-meta">Size: {} | Modified: {}</div>
+                <div class="card-meta">{} • {}</div>
                 <div class="card-actions">
-                    <a href="/?p={}" class="btn btn-primary" download>
+                    <a href="/preview?p={}" class="btn btn-primary download-btn" download="{}">
                         <svg class="btn-icon" viewBox="0 0 24 24">
                             <path fill="currentColor" d="M5,20H19V18H5M19,9H15V3H9V9H5L12,16L19,9Z"/>
                         </svg>
                         Download
                     </a>
-                    <a href="/preview?p={}" class="btn btn-primary">Preview</a>
+                    <a href="/preview?p={}" class="btn btn-primary preview-btn">
+                        <svg class="btn-icon" viewBox="0 0 24 24">
+                            <path fill="currentColor" d="M12,9A3,3 0 0,0 9,12A3,3 0 0,0 12,15A3,3 0 0,0 15,12A3,3 0 0,0 12,9M12,17A5,5 0 0,1 7,12A5,5 0 0,1 12,7A5,5 0 0,1 17,12A5,5 0 0,1 12,17M12,4.5C7,4.5 2.73,7.61 1,12C2.73,16.39 7,19.5 12,19.5C17,19.5 21.27,16.39 23,12C21.27,7.61 17,4.5 12,4.5Z" />
+                        </svg>
+                        Preview
+                    </a>
                 </div>
             </div>
-        "#, urlencoding::encode(&file.path), file.name, file.size, file.modified, 
-            urlencoding::encode(&file.path), urlencoding::encode(&file.path)));
+        "#, 
+        if !extension.is_empty() { format!(r#"<span class="file-ext">{}</span>"#, extension.to_uppercase()) } else { String::new() },
+        file.name, 
+        size_display, 
+        date_display, 
+        urlencoding::encode(&file.path), 
+        file.name,
+        urlencoding::encode(&file.path)));
     }
 
     let html = html

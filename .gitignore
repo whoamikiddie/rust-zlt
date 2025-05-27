@@ -1,2 +1,22 @@
 /main.go
 /zlt
+
+# Rust build artifacts
+/target/
+**/*.rs.bk
+*.pdb
+Cargo.lock
+
+# WiX build artifacts
+/installer/
+/target/wix/
+
+# IDE files
+/.idea/
+/.vscode/
+*.swp
+*.swo
+
+# OS-specific files
+.DS_Store
+Thumbs.db

@@ -40,3 +40,18 @@ derive_more = "0.99.17"
 dotenv = "0.15.0"
 thiserror = "1.0.40"
 anyhow = "1.0.71"
+ngrok = "0.14.0"
+url = "2.5.0"
+htmlescape = "0.3.1"
+
+# System monitoring dependencies
+sysinfo = "0.29.10"
+rustix = { version = "0.38.4", features = ["process"] }
+humantime = "2.1.0"
+
+# Platform-specific dependencies
+[target.'cfg(unix)'.dependencies]
+libc = "0.2.150"
+
+[target.'cfg(windows)'.dependencies]
+winapi = { version = "0.3.9", features = ["processthreadsapi", "sysinfoapi", "handleapi", "memoryapi"] }

@@ -1,0 +1,788 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ZLT System Monitor</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path fill='%233b82f6' d='M20,18H4V8H20M20,6H12L10,4H4C2.89,4 2,4.89 2,6V18A2,2 0 0,0 4,20H20A2,2 0 0,0 22,18V8C22,6.89 21.1,6 20,6Z'/></svg>">
+    <style>
+        :root {
+            --primary-color: #3b82f6;
+            --primary-dark: #2563eb;
+            --secondary-color: #8b5cf6;
+            --tertiary-color: #06b6d4;
+            --background-color: #0f172a;
+            --card-background: #1e293b;
+            --text-primary: #f8fafc;
+            --text-secondary: #94a3b8;
+            --border-color: #334155;
+            --hover-color: #1e40af;
+            --success-color: #22c55e;
+            --error-color: #ef4444;
+            --warning-color: #f59e0b;
+            --info-color: #0ea5e9;
+            --gradient-start: #3b82f6;
+            --gradient-end: #2563eb;
+            --glass-bg: rgba(30, 41, 59, 0.8);
+            --glass-border: rgba(255, 255, 255, 0.1);
+            --glass-shadow: rgba(0, 0, 0, 0.2);
+        }
+        
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body { 
+            font-family: 'Inter', sans-serif; 
+            background: var(--background-color); 
+            color: var(--text-primary); 
+            line-height: 1.6; 
+            min-height: 100vh; 
+        }
+        
+        .container { 
+            max-width: 1200px; 
+            margin: 0 auto; 
+            padding: 2rem; 
+            padding-top: 1rem; 
+        }
+        
+        /* Navigation bar */
+        .navbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1rem 2rem;
+            background: var(--card-background);
+            border-bottom: 1px solid var(--border-color);
+            margin-bottom: 2rem;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+        
+        .navbar-brand {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            text-decoration: none;
+            color: var(--text-primary);
+        }
+        
+        .navbar-logo {
+            height: 32px;
+            width: 32px;
+        }
+        
+        .navbar-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+        }
+        
+        .navbar-links {
+            display: flex;
+            gap: 1.5rem;
+        }
+        
+        .navbar-link {
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-weight: 500;
+            transition: color 0.3s ease;
+            position: relative;
+        }
+        
+        .navbar-link:hover {
+            color: var(--primary-color);
+        }
+        
+        .navbar-link.active {
+            color: var(--primary-color);
+        }
+        
+        .navbar-link.active::after {
+            content: '';
+            position: absolute;
+            bottom: -4px;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: var(--primary-color);
+            border-radius: 2px;
+        }
+        
+        /* Dashboard Styles */
+        .dashboard-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 2rem;
+        }
+        
+        .dashboard-title {
+            font-size: 1.75rem;
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+        
+        .dashboard-subtitle {
+            color: var(--text-secondary);
+            font-size: 1rem;
+        }
+        
+        .dashboard-refresh {
+            background: var(--primary-color);
+            color: white;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 0.5rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            transition: background 0.3s ease;
+        }
+        
+        .dashboard-refresh:hover {
+            background: var(--primary-dark);
+        }
+        
+        /* Stats Grid */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+        
+        .stat-card {
+            background: var(--card-background);
+            border-radius: 1rem;
+            padding: 1.5rem;
+            border: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .stat-header {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            margin-bottom: 1rem;
+        }
+        
+        .stat-icon {
+            width: 2.5rem;
+            height: 2.5rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 0.75rem;
+            color: var(--text-primary);
+        }
+        
+        .stat-title {
+            font-weight: 600;
+            font-size: 1.125rem;
+        }
+        
+        .stat-value {
+            font-size: 2rem;
+            font-weight: 700;
+            line-height: 1.2;
+            margin-bottom: 0.25rem;
+        }
+        
+        .stat-subtitle {
+            color: var(--text-secondary);
+            font-size: 0.875rem;
+            margin-bottom: 0.5rem;
+        }
+        
+        .progress-container {
+            width: 100%;
+            height: 0.5rem;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 0.25rem;
+            overflow: hidden;
+            margin-top: 0.5rem;
+        }
+        
+        .progress-bar {
+            height: 100%;
+            border-radius: 0.25rem;
+            transition: width 0.5s ease;
+        }
+        
+        .progress-cpu { background: var(--primary-color); }
+        .progress-memory { background: var(--secondary-color); }
+        .progress-disk { background: var(--tertiary-color); }
+        
+        /* Charts Layout */
+        .charts-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+        
+        .chart-card {
+            background: var(--card-background);
+            border-radius: 1rem;
+            padding: 1.5rem;
+            border: 1px solid var(--border-color);
+            height: 350px;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .chart-title {
+            margin-bottom: 1rem;
+            font-size: 1.25rem;
+            font-weight: 600;
+        }
+        
+        .chart-canvas {
+            flex: 1;
+            width: 100%;
+            height: calc(100% - 3rem);
+        }
+        
+        /* System Info Panel */
+        .system-info {
+            background: var(--card-background);
+            border-radius: 1rem;
+            padding: 1.5rem;
+            border: 1px solid var(--border-color);
+            margin-bottom: 1.5rem;
+        }
+        
+        .system-info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: 1.5rem;
+        }
+        
+        .info-item {
+            display: flex;
+            flex-direction: column;
+            gap: 0.25rem;
+        }
+        
+        .info-label {
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+        }
+        
+        .info-value {
+            font-size: 1.125rem;
+            font-weight: 600;
+        }
+        
+        /* Memory status indicator */
+        .memory-status {
+            padding: 0.5rem 1rem;
+            background: rgba(34, 197, 94, 0.1);
+            color: #22c55e;
+            border-radius: 0.5rem;
+            margin-bottom: 1rem;
+            font-size: 0.9rem;
+            text-align: center;
+        }
+        
+        .memory-status.warning {
+            background: rgba(245, 158, 11, 0.1);
+            color: #f59e0b;
+        }
+        
+        /* Responsive Design */
+        @media (max-width: 768px) {
+            .container { padding: 1rem; }
+            .stats-grid { grid-template-columns: 1fr; }
+            .charts-container { grid-template-columns: 1fr; }
+            .system-info-grid { grid-template-columns: 1fr 1fr; }
+            .navbar { padding: 1rem; flex-direction: column; gap: 1rem; }
+            .navbar-links { width: 100%; justify-content: space-around; }
+            .chart-card { height: 300px; }
+        }
+        
+        @media (max-width: 480px) {
+            .dashboard-header { flex-direction: column; align-items: flex-start; gap: 1rem; }
+            .system-info-grid { grid-template-columns: 1fr; }
+        }
+    </style>
+    <!-- Chart.js with lighter bundle size for better performance -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+</head>
+<body>
+    <!-- Navigation Bar -->
+    <nav class="navbar">
+        <a href="/" class="navbar-brand">
+            <svg class="navbar-logo" viewBox="0 0 24 24">
+                <path fill="currentColor" d="M20,18H4V8H20M20,6H12L10,4H4C2.89,4 2,4.89 2,6V18A2,2 0 0,0 4,20H20A2,2 0 0,0 22,18V8C22,6.89 21.1,6 20,6Z"/>
+            </svg>
+            <span class="navbar-title">Z Stealth</span>
+        </a>
+        <div class="navbar-links">
+            <a href="/" class="navbar-link">Files</a>
+            <a href="/dashboard" class="navbar-link active">Dashboard</a>
+        </div>
+    </nav>
+
+    <div class="container">
+        <div class="dashboard-header">
+            <div>
+                <h1 class="dashboard-title">System Dashboard</h1>
+                <p class="dashboard-subtitle">Server performance and monitoring</p>
+            </div>
+            <button id="refreshStats" class="dashboard-refresh">
+                <svg style="width:20px;height:20px" viewBox="0 0 24 24">
+                    <path fill="currentColor" d="M17.65,6.35C16.2,4.9 14.21,4 12,4A8,8 0 0,0 4,12A8,8 0 0,0 12,20C15.73,20 18.84,17.45 19.73,14H17.65C16.83,16.33 14.61,18 12,18A6,6 0 0,1 6,12A6,6 0 0,1 12,6C13.66,6 15.14,6.69 16.22,7.78L13,11H20V4L17.65,6.35Z" />
+                </svg>
+                Refresh
+            </button>
+        </div>
+
+        <!-- System Information -->
+        <div class="system-info">
+            <h2 style="margin-bottom: 1rem;">System Information</h2>
+            <!-- Memory target indicator -->
+            <div id="memory-status" class="memory-status">Memory within target range (50-200MB)</div>
+            <div class="system-info-grid">
+                <div class="info-item">
+                    <div class="info-label">Hostname</div>
+                    <div class="info-value" id="hostname">Loading...</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Uptime</div>
+                    <div class="info-value" id="uptime">Loading...</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Load Average</div>
+                    <div class="info-value" id="load-avg">Loading...</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Processes</div>
+                    <div class="info-value" id="processes">Loading...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Stats Grid -->
+        <div class="stats-grid">
+            <!-- CPU Stats -->
+            <div class="stat-card">
+                <div class="stat-header">
+                    <div class="stat-icon">
+                        <svg style="width:24px;height:24px" viewBox="0 0 24 24">
+                            <path fill="currentColor" d="M6,4H18V20H6V4M10,8V12H14V8H10Z" />
+                        </svg>
+                    </div>
+                    <span class="stat-title">CPU Usage</span>
+                </div>
+                <div class="stat-value" id="cpu-usage">0%</div>
+                <div class="stat-subtitle" id="cpu-temp">Temperature: --°C</div>
+                <div class="progress-container">
+                    <div class="progress-bar progress-cpu" id="cpu-progress" style="width: 0%"></div>
+                </div>
+            </div>
+
+            <!-- Memory Stats -->
+            <div class="stat-card">
+                <div class="stat-header">
+                    <div class="stat-icon">
+                        <svg style="width:24px;height:24px" viewBox="0 0 24 24">
+                            <path fill="currentColor" d="M17,17H7V7H17M21,11V9H19V7C19,5.89 18.1,5 17,5H15V3H13V5H11V3H9V5H7C5.89,5 5,5.89 5,7V9H3V11H5V13H3V15H5V17A2,2 0 0,0 7,19H9V21H11V19H13V21H15V19H17A2,2 0 0,0 19,17V15H21V13H19V11M13,13H11V11H13Z" />
+                        </svg>
+                    </div>
+                    <span class="stat-title">Memory Usage</span>
+                </div>
+                <div class="stat-value" id="memory-usage">0%</div>
+                <div class="stat-subtitle" id="memory-details">0 GB / 0 GB</div>
+                <div class="progress-container">
+                    <div class="progress-bar progress-memory" id="memory-progress" style="width: 0%"></div>
+                </div>
+            </div>
+
+            <!-- Disk Stats -->
+            <div class="stat-card">
+                <div class="stat-header">
+                    <div class="stat-icon">
+                        <svg style="width:24px;height:24px" viewBox="0 0 24 24">
+                            <path fill="currentColor" d="M12,3C7.58,3 4,4.79 4,7V17C4,19.21 7.59,21 12,21C16.41,21 20,19.21 20,17V7C20,4.79 16.42,3 12,3M12,5C16.08,5 18,6.34 18,7C18,7.66 16.08,9 12,9C7.92,9 6,7.66 6,7C6,6.34 7.92,5 12,5M18,9.28V12C18,12.66 16.08,14 12,14C7.92,14 6,12.66 6,12V9.28C7.4,10.12 9.53,10.5 12,10.5C14.47,10.5 16.6,10.12 18,9.28M18,14.28V17C18,17.66 16.08,19 12,19C7.92,19 6,17.66 6,17V14.28C7.4,15.12 9.53,15.5 12,15.5C14.47,15.5 16.6,15.12 18,14.28Z" />
+                        </svg>
+                    </div>
+                    <span class="stat-title">Disk Usage</span>
+                </div>
+                <div class="stat-value" id="disk-usage">0%</div>
+                <div class="stat-subtitle" id="disk-details">0 GB / 0 GB</div>
+                <div class="progress-container">
+                    <div class="progress-bar progress-disk" id="disk-progress" style="width: 0%"></div>
+                </div>
+            </div>
+
+            <!-- Network Stats -->
+            <div class="stat-card">
+                <div class="stat-header">
+                    <div class="stat-icon">
+                        <svg style="width:24px;height:24px" viewBox="0 0 24 24">
+                            <path fill="currentColor" d="M15,20A1,1 0 0,0 14,19H13V17H17A2,2 0 0,0 19,15V5A2,2 0 0,0 17,3H7A2,2 0 0,0 5,5V15A2,2 0 0,0 7,17H11V19H10A1,1 0 0,0 9,20H2V22H9A1,1 0 0,0 10,23H14A1,1 0 0,0 15,22H22V20H15M7,15V5H17V15H7Z" />
+                        </svg>
+                    </div>
+                    <span class="stat-title">Network Traffic</span>
+                </div>
+                <div class="stat-value" id="network-total">0 MB</div>
+                <div class="stat-subtitle">
+                    <span id="network-received">↓ 0 MB</span> • 
+                    <span id="network-transmitted">↑ 0 MB</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Charts -->
+        <div class="charts-container">
+            <div class="chart-card">
+                <h2 class="chart-title">CPU History</h2>
+                <div class="chart-canvas">
+                    <canvas id="cpuChart"></canvas>
+                </div>
+            </div>
+            
+            <div class="chart-card">
+                <h2 class="chart-title">Memory History</h2>
+                <div class="chart-canvas">
+                    <canvas id="memoryChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script>
+        // Debounce function to limit CPU usage during UI updates
+        function debounce(func, wait) {
+            let timeout;
+            return function(...args) {
+                const context = this;
+                clearTimeout(timeout);
+                timeout = setTimeout(() => func.apply(context, args), wait);
+            };
+        }
+
+        // Initialize chart data with limited points to save memory
+        const timestamps = Array(20).fill('');
+        const cpuData = Array(20).fill(0);
+        const memoryData = Array(20).fill(0);
+        
+        // Track if charts need update to avoid excessive rendering
+        let chartsNeedUpdate = false;
+
+        // Function to format bytes to human-readable format (optimized)
+        function formatBytes(bytes, decimals = 1) {
+            if (bytes === 0) return '0 Bytes';
+            
+            const k = 1024;
+            const dm = decimals < 0 ? 0 : decimals;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+            
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
+        }
+
+        // Format uptime in human-readable format
+        function formatUptime(seconds) {
+            const days = Math.floor(seconds / 86400);
+            const hours = Math.floor((seconds % 86400) / 3600);
+            const minutes = Math.floor((seconds % 3600) / 60);
+            
+            let result = '';
+            if (days > 0) result += `${days}d `;
+            if (hours > 0 || days > 0) result += `${hours}h `;
+            result += `${minutes}m`;
+            
+            return result;
+        }
+        
+        // Chart.js global defaults for better performance
+        Chart.defaults.font.family = "'Inter', sans-serif";
+        Chart.defaults.animation.duration = 800;
+        Chart.defaults.elements.point.radius = 0; // Hide points for better performance
+        Chart.defaults.elements.point.hoverRadius = 5; // Show points on hover
+        Chart.defaults.elements.line.borderWidth = 2;
+        Chart.defaults.plugins.tooltip.enabled = true;
+        
+        // Responsive design helper
+        const isSmallScreen = window.innerWidth < 768;
+
+        // Initialize CPU chart with optimized options
+        const cpuCtx = document.getElementById('cpuChart').getContext('2d');
+        const cpuChart = new Chart(cpuCtx, {
+            type: 'line',
+            data: {
+                labels: timestamps,
+                datasets: [{
+                    label: 'CPU Usage %',
+                    data: cpuData,
+                    borderColor: '#3b82f6',
+                    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                    tension: 0.3,
+                    fill: true
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                animation: {
+                    duration: isSmallScreen ? 0 : 800 // Disable animations on small screens
+                },
+                plugins: {
+                    legend: {
+                        display: false
+                    },
+                    tooltip: {
+                        // Use callbacks for custom tooltip formatting
+                        callbacks: {
+                            title: function(context) {
+                                return context[0].label || 'Time';
+                            },
+                            label: function(context) {
+                                return `CPU: ${context.raw.toFixed(1)}%`;
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        max: 100,
+                        ticks: {
+                            callback: function(value) {
+                                return value + '%';
+                            },
+                            color: '#94a3b8',
+                            maxTicksLimit: 6 // Limit ticks for better readability
+                        },
+                        grid: {
+                            color: 'rgba(148, 163, 184, 0.1)'
+                        }
+                    },
+                    x: {
+                        ticks: {
+                            color: '#94a3b8',
+                            maxTicksLimit: isSmallScreen ? 5 : 10 // Fewer labels on small screens
+                        },
+                        grid: {
+                            display: false
+                        }
+                    }
+                }
+            }
+        });
+
+        // Initialize Memory chart with optimized options
+        const memCtx = document.getElementById('memoryChart').getContext('2d');
+        const memoryChart = new Chart(memCtx, {
+            type: 'line',
+            data: {
+                labels: timestamps,
+                datasets: [{
+                    label: 'Memory Usage %',
+                    data: memoryData,
+                    borderColor: '#8b5cf6',
+                    backgroundColor: 'rgba(139, 92, 246, 0.1)',
+                    tension: 0.3,
+                    fill: true
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                animation: {
+                    duration: isSmallScreen ? 0 : 800 // Disable animations on small screens
+                },
+                plugins: {
+                    legend: {
+                        display: false
+                    },
+                    tooltip: {
+                        callbacks: {
+                            title: function(context) {
+                                return context[0].label || 'Time';
+                            },
+                            label: function(context) {
+                                return `Memory: ${context.raw.toFixed(1)}%`;
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        max: 100,
+                        ticks: {
+                            callback: function(value) {
+                                return value + '%';
+                            },
+                            color: '#94a3b8',
+                            maxTicksLimit: 6 // Limit ticks for better readability
+                        },
+                        grid: {
+                            color: 'rgba(148, 163, 184, 0.1)'
+                        }
+                    },
+                    x: {
+                        ticks: {
+                            color: '#94a3b8',
+                            maxTicksLimit: isSmallScreen ? 5 : 10 // Fewer labels on small screens
+                        },
+                        grid: {
+                            display: false
+                        }
+                    }
+                }
+            }
+        });
+        
+        // Optimized function to update the stats display
+        const updateStats = debounce(function() {
+            fetch('/api/system-stats')
+                .then(response => response.json())
+                .then(data => {
+                    // Update memory status indicator if it's not within bounds
+                    const memoryStatus = document.getElementById('memory-status');
+                    if (memoryStatus) {
+                        if (data.memory_within_bounds) {
+                            memoryStatus.classList.remove('warning');
+                            memoryStatus.textContent = 'Memory within target range (50-200MB)';
+                        } else {
+                            memoryStatus.classList.add('warning');
+                            memoryStatus.textContent = 'Memory outside target range (50-200MB)';
+                        }
+                    }
+                    
+                    // Update CPU stats with optimization to avoid layout thrashing
+                    document.getElementById('cpu-usage').textContent = `${data.cpu_usage.toFixed(1)}%`;
+                    document.getElementById('cpu-progress').style.width = `${data.cpu_usage}%`;
+                    
+                    if (data.cpu_temp) {
+                        document.getElementById('cpu-temp').textContent = `Temperature: ${data.cpu_temp.toFixed(1)}°C`;
+                    } else {
+                        document.getElementById('cpu-temp').textContent = 'Temperature: N/A';
+                    }
+                    
+                    // Update Memory stats
+                    document.getElementById('memory-usage').textContent = `${data.memory_usage_percent.toFixed(1)}%`;
+                    document.getElementById('memory-details').textContent = `${formatBytes(data.memory_used)} / ${formatBytes(data.memory_total)}`;
+                    document.getElementById('memory-progress').style.width = `${data.memory_usage_percent}%`;
+                    
+                    // Update Disk stats
+                    document.getElementById('disk-usage').textContent = `${data.disk_usage_percent.toFixed(1)}%`;
+                    document.getElementById('disk-details').textContent = `${formatBytes(data.disk_total - data.disk_free)} / ${formatBytes(data.disk_total)}`;
+                    document.getElementById('disk-progress').style.width = `${data.disk_usage_percent}%`;
+                    
+                    // Update Network stats
+                    document.getElementById('network-total').textContent = formatBytes(data.network_received + data.network_transmitted);
+                    document.getElementById('network-received').textContent = `↓ ${formatBytes(data.network_received)}`;
+                    document.getElementById('network-transmitted').textContent = `↑ ${formatBytes(data.network_transmitted)}`;
+                    
+                    // Update System Info
+                    document.getElementById('hostname').textContent = data.hostname;
+                    document.getElementById('uptime').textContent = formatUptime(data.uptime);
+                    document.getElementById('load-avg').textContent = `${data.system_load[0].toFixed(2)}, ${data.system_load[1].toFixed(2)}, ${data.system_load[2].toFixed(2)}`;
+                    document.getElementById('processes').textContent = data.processes_count;
+                    
+                    // Only update charts if visible in viewport to save resources
+                    const cpuChartElement = document.getElementById('cpuChart');
+                    if (isElementInViewport(cpuChartElement)) {
+                        // Update charts
+                        const now = new Date();
+                        const timeString = now.getHours().toString().padStart(2, '0') + ':' + 
+                                        now.getMinutes().toString().padStart(2, '0') + ':' + 
+                                        now.getSeconds().toString().padStart(2, '0');
+                        
+                        timestamps.push(timeString);
+                        timestamps.shift();
+                        
+                        cpuData.push(data.cpu_usage);
+                        cpuData.shift();
+                        
+                        memoryData.push(data.memory_usage_percent);
+                        memoryData.shift();
+                        
+                        // Batch chart updates to reduce redraws
+                        chartsNeedUpdate = true;
+                    }
+                })
+                .catch(error => {
+                    console.error('Error fetching system stats:', error);
+                });
+        }, 100); // 100ms debounce to prevent excessive updates
+        
+        // Function to check if element is in viewport
+        function isElementInViewport(el) {
+            if (!el) return false;
+            const rect = el.getBoundingClientRect();
+            return (
+                rect.top >= 0 &&
+                rect.left >= 0 &&
+                rect.bottom <= (window.innerHeight || document.documentElement.clientHeight) &&
+                rect.right <= (window.innerWidth || document.documentElement.clientWidth)
+            );
+        }
+        
+        // Function to update charts with requestAnimationFrame for better performance
+        function updateCharts() {
+            if (chartsNeedUpdate) {
+                cpuChart.update('none'); // 'none' mode skips animations for better performance
+                memoryChart.update('none');
+                chartsNeedUpdate = false;
+            }
+            requestAnimationFrame(updateCharts);
+        }
+        
+        // Initial update
+        updateStats();
+        
+        // Start the chart update loop
+        updateCharts();
+        
+        // Set interval for regular updates - using adaptive interval based on system load
+        let updateInterval = 5000; // Start with 5 seconds
+        
+        function scheduleNextUpdate() {
+            setTimeout(() => {
+                updateStats();
+                // Get current CPU usage to adapt interval
+                const cpuUsageElement = document.getElementById('cpu-usage');
+                if (cpuUsageElement) {
+                    const currentCpuUsage = parseFloat(cpuUsageElement.textContent);
+                    // Adapt interval based on CPU usage
+                    if (currentCpuUsage > 70) {
+                        updateInterval = 8000; // Slow down if CPU usage is high
+                    } else if (currentCpuUsage > 40) {
+                        updateInterval = 5000; // Medium interval for moderate usage
+                    } else {
+                        updateInterval = 3000; // Faster updates for low CPU usage
+                    }
+                }
+                scheduleNextUpdate();
+            }, updateInterval);
+        }
+        
+        scheduleNextUpdate();
+        
+        // Refresh button - with throttling to prevent spam
+        let lastRefreshTime = 0;
+        document.getElementById('refreshStats').addEventListener('click', () => {
+            const now = Date.now();
+            if (now - lastRefreshTime > 1000) { // Prevent refreshing more than once per second
+                lastRefreshTime = now;
+                updateStats();
+            }
+        });
+        
+        // Optimize for mobile - disable animations on smaller screens
+        window.addEventListener('resize', debounce(() => {
+            const isSmall = window.innerWidth < 768;
+            cpuChart.options.animation.duration = isSmall ? 0 : 800;
+            memoryChart.options.animation.duration = isSmall ? 0 : 800;
+        }, 200));
+    </script>
+</body>
+</html>

