@@ -85,25 +85,6 @@ pub async fn v22() {
     }
 }
 
-pub async fn w23() {
-    for i in 0..5000 {
-        let _filename = format!("fake-file-{}.txt", i);
-    }
-}
-
-pub fn x24() -> String {
-    const CHARSET: &[u8] = b"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-    let mut rng = thread_rng();
-    let mut result = String::with_capacity(16);
-    
-    for _ in 0..16 {
-        let idx = rng.gen_range(0..CHARSET.len());
-        result.push(CHARSET[idx] as char);
-    }
-    
-    result
-}
-
 pub async fn c3() {
     let mut rng = thread_rng();
     for i in 0..20000 {

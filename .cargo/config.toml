@@ -1,2 +1,0 @@
-[patch.crates-io]
-ngrok = { git = "https://github.com/ngrok/ngrok-rust", branch = "main" } 

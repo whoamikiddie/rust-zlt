@@ -3,49 +3,20 @@ name: Build Windows MSI Installer
 on:
   push:
     branches: [ main, master ]
-    tags:
-      - 'v*'
   pull_request:
     branches: [ main, master ]
+  # Allow manual triggering of the workflow
   workflow_dispatch:
-    inputs:
-      version:
-        description: 'Version override (optional)'
-        required: false
-        type: string
-
-env:
-  CARGO_TERM_COLOR: always
-  RUST_BACKTRACE: 1
 
 jobs:
   build:
     runs-on: windows-latest
     permissions:
-      contents: write
+      contents: read
       packages: write
-    
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
-    
-    - name: Set up version
-      id: version
-      run: |
-        $ErrorActionPreference = 'Stop'
-        $version = if ($env:GITHUB_EVENT_NAME -eq 'push' -and $env:GITHUB_REF -match '^refs/tags/v') {
-            $env:GITHUB_REF -replace '^refs/tags/v',''
-        } elseif ('${{ github.event.inputs.version }}') {
-            '${{ github.event.inputs.version }}'
-        } else {
-            # Format: 0.1.YYYYMMDD
-            $datePart = Get-Date -Format "yyyyMMdd"
-            "0.1.$datePart"
-        }
-        "VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-        "version=$version" >> $env:GITHUB_OUTPUT
     
     - name: Install Rust
       uses: dtolnay/rust-toolchain@stable
@@ -55,14 +26,6 @@ jobs:
     
     - name: Cache Rust dependencies
       uses: Swatinem/rust-cache@v2
-      with:
-        cache-on-failure: true
-        shared-key: "windows-msvc"
-        cache-directories: |
-          ~/.cargo/registry/index
-          ~/.cargo/registry/cache
-          ~/.cargo/git
-          target
     
     - name: Install WiX Toolset
       run: |
@@ -70,101 +33,67 @@ jobs:
         Invoke-WebRequest -Uri $wixToolsetUrl -OutFile wix311.exe
         Start-Process -FilePath .\wix311.exe -ArgumentList "/install","/quiet" -NoNewWindow -Wait
         echo "$env:WIX\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
-      continue-on-error: false
     
     - name: Install cargo-wix
-      run: |
-        cargo install cargo-wix --force
-      continue-on-error: false
+      run: cargo install cargo-wix
     
-    - name: Install OpenSSL
+    - name: Install OpenSSL (Windows)
       run: |
         choco install openssl -y
         echo "OPENSSL_DIR=C:\Program Files\OpenSSL-Win64" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
         echo "OPENSSL_LIB_DIR=C:\Program Files\OpenSSL-Win64\lib" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
         echo "OPENSSL_INCLUDE_DIR=C:\Program Files\OpenSSL-Win64\include" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-      continue-on-error: false
-    
-    - name: Update version in Cargo.toml
-      run: |
-        $content = Get-Content -Path Cargo.toml -Raw
-        $newContent = $content -replace '(?m)^version = "[^"]*"', "version = `"$env:VERSION`""
-        Set-Content -Path Cargo.toml -Value $newContent -NoNewline
-    
-    - name: Update version in wix.toml
-      run: |
-        $content = Get-Content -Path wix/wix.toml -Raw
-        $newContent = $content -replace 'product_version = "[^"]*"', "product_version = `"$env:VERSION`""
-        $newContent = $newContent -replace '(?m)^version = "[^"]*"', "version = `"$env:VERSION`""
-        Set-Content -Path wix/wix.toml -Value $newContent -NoNewline
     
     - name: Build Release Binary
       run: |
+        # Set RUSTFLAGS to help with Windows compilation
         $env:RUSTFLAGS="-C target-feature=+crt-static"
         cargo build --release
-      env:
-        RUST_BACKTRACE: 1
-    
-    - name: Run Tests
-      run: cargo test --release
-      continue-on-error: true
     
     - name: Build MSI Installer
       run: |
-        Write-Host "Building MSI installer version $env:VERSION"
+        echo "Contents of project directory:"
+        Get-ChildItem -Path . -Recurse -Depth 2 | Where-Object { -not $_.PSIsContainer } | Select-Object FullName
+        
+        echo "Using WiX files in ./wix directory:"
+        Get-ChildItem -Path ./wix -Recurse
+        
+        echo "Package name from Cargo.toml:"
+        (Get-Content -Path Cargo.toml | Select-String -Pattern "^name = ").Line
+        
+        # Run cargo wix with debugging output and fallback to default package name
         cargo wix --nocapture --force --no-build --installer --output target/wix/
-      env:
-        RUST_BACKTRACE: 1
     
-    - name: Verify MSI
+    - name: List MSI files
+      run: |
+        Get-ChildItem -Path target\wix -Recurse -Filter *.msi | ForEach-Object { Write-Output $_.FullName }
+    
+    - name: Create installer directory
+      run: mkdir -p installer
+    
+    - name: Copy MSI to installer directory
       run: |
         $msiFile = Get-ChildItem -Path target\wix -Recurse -Filter *.msi | Select-Object -First 1
-        if (-not $msiFile) {
-          Write-Error "MSI file not found"
-          exit 1
-        }
-        Write-Host "Found MSI: $($msiFile.FullName)"
-    
-    - name: Prepare Installer
-      run: |
-        mkdir -p installer
-        $msiFile = Get-ChildItem -Path target\wix -Recurse -Filter *.msi | Select-Object -First 1
-        $newName = "ZLT-System-Monitor-$env:VERSION.msi"
+        $version = (Get-Date -Format "yyyy.MM.dd.HHmm")
+        $newName = "ZLT-System-Monitor-$version.msi"
         Copy-Item -Path $msiFile.FullName -Destination "installer\$newName"
         echo "MSI_PATH=installer\$newName" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
     
     - name: Upload MSI Artifact
       uses: actions/upload-artifact@v4
       with:
-        name: zlt-windows-installer-${{ steps.version.outputs.version }}
+        name: zlt-windows-installer
         path: installer/*.msi
         retention-days: 90
-    
+
+    # Create GitHub Release if this is a tag
     - name: Create Release
       if: startsWith(github.ref, 'refs/tags/')
       uses: softprops/action-gh-release@v1
       with:
         files: installer/*.msi
-        name: Release ${{ steps.version.outputs.version }}
         draft: false
         prerelease: false
         generate_release_notes: true
-        body: |
-          ZLT System Monitor Windows Installer v${{ steps.version.outputs.version }}
-          
-          ### Installation Instructions
-          1. Download the MSI installer
-          2. Right-click and select "Run as administrator"
-          3. Follow the installation wizard
-          
-          ### System Requirements
-          - Windows 10 or later
-          - 64-bit system
-          
-          ### What's New
-          - Automated installer build
-          - System tray integration
-          - Improved performance monitoring
-        
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

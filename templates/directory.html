@@ -117,7 +117,8 @@
             scrollbar-color: var(--primary-color) transparent;
             max-width: 100%;
             -webkit-overflow-scrolling: touch;
-            position: relative;
+            gap: 0.5rem;
+            margin-bottom: 0.5rem;
         }
         
         .breadcrumb::-webkit-scrollbar {
@@ -132,50 +133,35 @@
         .breadcrumb-item {
             display: flex;
             align-items: center;
-            flex-shrink: 0;
-            position: relative;
+            gap: 0.5rem;
         }
         
         .breadcrumb-link {
-            padding: 0.4rem 0.75rem;
-            border-radius: 0.5rem;
-            background-color: rgba(59, 130, 246, 0.1);
+            color: var(--text-secondary);
+            text-decoration: none;
+            padding: 0.25rem 0.5rem;
+            border-radius: 0.25rem;
             transition: all 0.3s ease;
-            font-weight: 500;
-            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
-            display: flex;
-            align-items: center;
+            font-size: 0.9rem;
         }
         
         .breadcrumb-link:hover {
-            background-color: rgba(59, 130, 246, 0.2);
-            transform: translateY(-1px);
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            color: var(--primary-color);
+            background: rgba(59, 130, 246, 0.1);
         }
         
         .breadcrumb-current {
-            padding: 0.4rem 0.75rem;
-            border-radius: 0.5rem;
-            background-color: var(--primary-color);
-            color: white;
+            color: var(--text-primary);
             font-weight: 500;
-            max-width: 300px;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-            display: inline-block;
-            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            padding: 0.25rem 0.5rem;
+            border-radius: 0.25rem;
+            background: rgba(59, 130, 246, 0.1);
+            font-size: 0.9rem;
         }
         
         .breadcrumb-separator {
             color: var(--text-secondary);
-            opacity: 0.7;
             margin: 0 0.25rem;
-            flex-shrink: 0;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            height: 24px;
         }
         
         /* Standard mobile devices */
@@ -242,8 +228,8 @@
         
         @media (max-width: 768px) { 
             .container { padding: 1rem; } 
-            .header { padding: 1.5rem; flex-direction: column; } 
-            .header-content { width: 100%; justify-content: flex-start; } 
+            .header { padding: 1.5rem; flex-direction: column; text-align: center; } 
+            .header-content { width: 100%; justify-content: center; flex-direction: column; gap: 1rem; } 
             .title { font-size: 1.5rem; } 
             .upload-form { flex-direction: column; } 
             .navbar { padding: 1rem; flex-direction: column; gap: 1rem; }
@@ -253,12 +239,12 @@
             .card { padding: 1.25rem; display: flex; flex-direction: column; min-height: 240px; } /* Increased min-height */
             .card-icon { width: 40px; height: 40px; position: relative; } 
             .file-ext { font-size: 0.5rem; right: -6px; top: -6px; padding: 1px 3px; }
-            .path-info { flex-direction: column; align-items: flex-start; } 
-            .breadcrumb { margin-bottom: 0.5rem; width: 100%; overflow-x: auto; padding-bottom: 0.5rem; white-space: nowrap; scroll-behavior: smooth; -webkit-overflow-scrolling: touch; }
+            .path-info { flex-direction: column; align-items: flex-start; padding: 1rem; } 
+            .breadcrumb { width: 100%; padding: 0.5rem 0; margin-bottom: 0.75rem; }
             .breadcrumb-item { display: inline-block; }
             .breadcrumb-current { word-break: break-all; display: inline; }
             .breadcrumb-separator { display: inline-block; }
-            .stats { margin-top: 0.5rem; } 
+            .stats { width: 100%; display: flex; justify-content: space-around; padding-top: 0.5rem; border-top: 1px solid var(--border-color); } 
             .toast { left: 1rem; right: 1rem; bottom: 1rem; } 
             .theme-toggle { bottom: 1rem; left: 1rem; transform: scale(0.9); } 
             .upload-status { width: 90%; } 

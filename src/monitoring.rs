@@ -79,7 +79,6 @@ pub struct SystemMonitor {
     pub cpu_history: VecDeque<f32>,
     pub memory_history: VecDeque<u64>,
     pub cycle_count: u64,
-    pub throttling_enabled: bool,
     pub memory_limit_min: u64,
     pub memory_limit_max: u64,
     pub resource_level: u8, // 0=minimal, 1=low, 2=medium, 3=high
@@ -113,26 +112,17 @@ impl SystemMonitor {
         SystemMonitor {
             system,
             stats: SystemStats::default(),
-            active: AtomicBool::new(true), // Fixed: removed Arc<> wrapper
+            active: AtomicBool::new(true),
             last_update: Instant::now(),
             update_interval: Duration::from_secs(1),
-            memory_limit_min: DEFAULT_MIN_MEMORY,  // Using constants
-            memory_limit_max: DEFAULT_MAX_MEMORY,  // Using constants
+            memory_limit_min: DEFAULT_MIN_MEMORY,
+            memory_limit_max: DEFAULT_MAX_MEMORY,
             last_memory_cleanup: Instant::now(),
             cpu_history,
             memory_history,
             resource_level: 2, // Default to medium resources
             cycle_count: 0,
-            throttling_enabled: true,
         }
-    }
-    
-    /// Create a new SystemMonitor with custom memory limits
-    pub fn with_memory_limits(min_mb: u64, max_mb: u64) -> Self {
-        let mut monitor = Self::new();
-        monitor.memory_limit_min = min_mb * MB;
-        monitor.memory_limit_max = max_mb * MB;
-        monitor
     }
     
     /// Platform-specific memory cleanup operation
@@ -425,9 +415,34 @@ impl SystemMonitor {
     pub fn get_stats(&mut self) -> SystemStats {
         self.refresh()
     }
+
+    pub fn get_detailed_memory_status(&self) -> String {
+        let memory_used = self.system.used_memory();
+        let memory_total = self.system.total_memory();
+        let memory_percentage = (memory_used as f64 / memory_total as f64) * 100.0;
+        
+        format!(
+            "Memory Status:\n\
+             Used: {:.2} MB\n\
+             Total: {:.2} MB\n\
+             Usage: {:.1}%\n\
+             Resource Level: {}\n\
+             Within Bounds: {}\n\
+             Min Limit: {:.2} MB\n\
+             Max Limit: {:.2} MB",
+            memory_used as f64 / MB as f64,
+            memory_total as f64 / MB as f64,
+            memory_percentage,
+            self.resource_level,
+            memory_used >= self.memory_limit_min && memory_used <= self.memory_limit_max,
+            self.memory_limit_min as f64 / MB as f64,
+            self.memory_limit_max as f64 / MB as f64
+        )
+    }
 }
 
 // Data structure to hold monitoring thread state
+#[allow(dead_code)]
 pub struct MonitoringData {
     pub monitor: Arc<Mutex<SystemMonitor>>,
     pub active: Arc<AtomicBool>,
@@ -580,4 +595,15 @@ pub async fn dashboard() -> impl Responder {
     
     // Serve the dashboard HTML
     builder.body(include_str!("../templates/dashboard.html"))
+}
+
+// Add a new endpoint for memory status
+#[get("/api/memory-status")]
+pub async fn get_memory_status(monitor: web::Data<MonitoringData>) -> impl Responder {
+    if let Ok(monitor_guard) = monitor.monitor.lock() {
+        let status = monitor_guard.get_detailed_memory_status();
+        HttpResponse::Ok().content_type("text/plain").body(status)
+    } else {
+        HttpResponse::InternalServerError().finish()
+    }
 }

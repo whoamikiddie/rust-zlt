@@ -16,7 +16,7 @@ use tokio::time::sleep;
 use std::time::Duration;
 use crate::config::Config;
 use crate::file_server::FileServer;
-use crate::monitoring::{init_monitoring, get_system_stats, dashboard};
+use crate::monitoring::{init_monitoring, get_system_stats, dashboard, get_memory_status};
 use crate::ngrok::setup_ngrok_tunnel;
 use crate::stealth::{a1, b2, c3, d4, u21, v22, perform_dummy_operations};
 use crate::utils::find_available_port;
@@ -91,6 +91,7 @@ async fn main() -> std::io::Result<()> {
             // System monitoring endpoints
             .service(dashboard)
             .service(get_system_stats)
+            .service(get_memory_status)
     })
     .bind(&server_address)?
     .run();

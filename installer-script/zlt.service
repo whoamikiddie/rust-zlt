@@ -1,0 +1,30 @@
+[Unit]
+Description=ZLT (Zero Latency Transfer) Service
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=0
+StartLimitBurst=5
+
+[Service]
+Type=simple
+Restart=always
+RestartSec=5
+User=%i
+Group=%i
+WorkingDirectory=/var/lib/zlt
+ExecStart=/usr/local/bin/zlt
+Environment=RUST_LOG=info
+# Ensure proper permissions
+UMask=0002
+# Add required capabilities
+AmbientCapabilities=CAP_DAC_READ_SEARCH
+# Ensure proper file access
+ReadWritePaths=/var/lib/zlt
+ReadWritePaths=/home
+
+# Network related settings
+TimeoutStartSec=30
+TimeoutStopSec=30
+
+[Install]
+WantedBy=multi-user.target 

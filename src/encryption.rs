@@ -1,7 +1,6 @@
 use aes_gcm::{aead::{Aead, KeyInit, OsRng, AeadCore}, Aes256Gcm};
 use aes_gcm::aead::generic_array::GenericArray;
 use base64::{engine::general_purpose::STANDARD, Engine as _};
-use rand::Rng;
 
 // XOR-based encoding with base64
 pub fn z26(s: String) -> String {
@@ -29,76 +28,6 @@ pub fn aa27(s: String) -> String {
     } else {
         String::new()
     }
-}
-
-// Generate random key
-pub fn y25() -> String {
-    let mut rng = rand::thread_rng();
-    let mut buffer = [0u8; 16];
-    rng.fill(&mut buffer);
-    STANDARD.encode(buffer)
-}
-
-// AES-GCM encryption and base64 encoding
-pub fn ab28(data: &str, key: &str) -> String {
-    let key_bytes = key.as_bytes();
-    let key_bytes = &key_bytes[..16.min(key_bytes.len())];
-    let padded_key = if key_bytes.len() < 32 {
-        let mut padded = Vec::from(key_bytes);
-        padded.resize(32, 0);
-        padded
-    } else {
-        Vec::from(&key_bytes[..32])
-    };
-    
-    let key = GenericArray::clone_from_slice(&padded_key);
-    let cipher = Aes256Gcm::new(&key);
-    let nonce = Aes256Gcm::generate_nonce(&mut OsRng);
-    
-    match cipher.encrypt(&nonce, data.as_bytes()) {
-        Ok(encrypted) => {
-            let mut result = nonce.to_vec();
-            result.extend_from_slice(&encrypted);
-            STANDARD.encode(result)
-        },
-        Err(_) => String::new()
-    }
-}
-
-// AES-GCM decryption from base64
-pub fn ac29(data: &str, key: &str) -> String {
-    if let Ok(decoded) = STANDARD.decode(data) {
-        let key_bytes = key.as_bytes();
-        let key_bytes = &key_bytes[..16.min(key_bytes.len())];
-        let padded_key = if key_bytes.len() < 16 {
-            let mut padded = Vec::from(key_bytes);
-            padded.resize(16, 0);
-            padded
-        } else {
-            Vec::from(key_bytes)
-        };
-        
-        let key = GenericArray::clone_from_slice(&padded_key);
-        let cipher = Aes256Gcm::new(&key);
-        
-        if decoded.len() > 12 {
-            let nonce_bytes = &decoded[..12];
-            let ciphertext = &decoded[12..];
-            
-            let nonce = GenericArray::from_slice(nonce_bytes);
-            
-            match cipher.decrypt(nonce, ciphertext) {
-                Ok(decrypted) => {
-                    if let Ok(result) = String::from_utf8(decrypted) {
-                        return result;
-                    }
-                },
-                Err(_) => {}
-            }
-        }
-    }
-    
-    String::new()
 }
 
 // AES-GCM encryption for binary data

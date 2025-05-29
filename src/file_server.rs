@@ -112,7 +112,6 @@ struct DirectoryTemplate {
     display_path: String,
     directories: Vec<FileEntry>,
     files: Vec<FileEntry>,
-    is_windows: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -236,7 +235,6 @@ async fn list_directory(path: &str) -> Result<String, std::io::Error> {
         display_path,
         directories,
         files,
-        is_windows: cfg!(windows),
     };
     
     Ok(render_directory_template(&template))
