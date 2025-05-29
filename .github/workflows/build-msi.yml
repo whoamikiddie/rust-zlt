@@ -34,15 +34,16 @@ jobs:
     - name: Set up version
       id: version
       run: |
-        if ($env:GITHUB_EVENT_NAME -eq 'push' -and $env:GITHUB_REF.StartsWith('refs/tags/v')) {
-          $version = $env:GITHUB_REF -replace '^refs/tags/v',''
-        } elseif (${{ github.event.inputs.version != '' }}) {
-          $version = '${{ github.event.inputs.version }}'
+        $ErrorActionPreference = 'Stop'
+        $version = if ($env:GITHUB_EVENT_NAME -eq 'push' -and $env:GITHUB_REF -match '^refs/tags/v') {
+            $env:GITHUB_REF -replace '^refs/tags/v',''
+        } elseif ('${{ github.event.inputs.version }}') {
+            '${{ github.event.inputs.version }}'
         } else {
-          $version = Get-Date -Format "yyyy.MM.dd.HHmm"
+            Get-Date -Format "yyyy.MM.dd.HHmm"
         }
-        echo "VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-        echo "version=$version" >> $env:GITHUB_OUTPUT
+        "VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+        "version=$version" >> $env:GITHUB_OUTPUT
     
     - name: Install Rust
       uses: dtolnay/rust-toolchain@stable
