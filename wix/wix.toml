@@ -5,6 +5,8 @@ product_name = "ZLT System Monitor"
 product_version = "1.0.0"
 # Manufacturer is a required field, but can be any value
 manufacturer = "ZLT"
+upgrade_guid = "12345678-1234-1234-1234-123456789012"
+product_icon = "wix/icon.ico"
 
 [build]
 # Path to the WiX source (.wxs) file
@@ -16,11 +18,21 @@ binary_path = "target/release/zlt.exe"
 # Path to the license file
 license = "wix/license.rtf"
 
+[bundle]
+name = "ZLT System Monitor Bundle"
+version = "1.0.0"
+manufacturer = "ZLT"
+upgrade_code = "87654321-4321-4321-4321-987654321098"
+
 [settings]
 # Additional compiler (candle.exe) arguments
-# candle_args = []
+candle_args = ["-arch", "x64"]
 # Additional linker (light.exe) arguments
-# light_args = []
+light_args = ["-sice:ICE61", "-sice:ICE91"]
+install_dir = "ZLT"
+program_menu_folder = "ZLT System Monitor"
+desktop_shortcut = true
+start_menu_shortcut = true
 
 [log]
 # Log level (off, error, warn, info, debug, trace)
@@ -31,3 +43,19 @@ level = "info"
 default = "en-US"
 # Supported UI languages
 enabled = ["en-US"]
+
+[registry]
+# Add registry keys for the application
+[[registry.entries]]
+path = "SOFTWARE\\ZLT\\SystemMonitor"
+name = "InstallPath"
+value = "[INSTALLDIR]"
+root = "HKLM"
+type = "string"
+
+[[registry.entries]]
+path = "SOFTWARE\\ZLT\\SystemMonitor"
+name = "Version"
+value = "1.0.0"
+root = "HKLM"
+type = "string"
