@@ -40,7 +40,8 @@ jobs:
         } elseif ('${{ github.event.inputs.version }}') {
             '${{ github.event.inputs.version }}'
         } else {
-            Get-Date -Format "yyyy.MM.dd.HHmm"
+            # Format: YYYY.M.D.HHMM (no leading zeros in month and day)
+            Get-Date -Format "yyyy.M.d.HHmm"
         }
         "VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
         "version=$version" >> $env:GITHUB_OUTPUT
@@ -55,6 +56,12 @@ jobs:
       uses: Swatinem/rust-cache@v2
       with:
         cache-on-failure: true
+        shared-key: "windows-msvc"
+        cache-directories: |
+          ~/.cargo/registry/index
+          ~/.cargo/registry/cache
+          ~/.cargo/git
+          target
     
     - name: Install WiX Toolset
       run: |
