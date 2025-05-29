@@ -40,8 +40,9 @@ jobs:
         } elseif ('${{ github.event.inputs.version }}') {
             '${{ github.event.inputs.version }}'
         } else {
-            # Format: YYYY.M.D.HHMM (no leading zeros in month and day)
-            Get-Date -Format "yyyy.M.d.HHmm"
+            # Format: 0.1.YYYYMMDD
+            $datePart = Get-Date -Format "yyyyMMdd"
+            "0.1.$datePart"
         }
         "VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
         "version=$version" >> $env:GITHUB_OUTPUT
@@ -87,15 +88,15 @@ jobs:
     - name: Update version in Cargo.toml
       run: |
         $content = Get-Content -Path Cargo.toml -Raw
-        $content = $content -replace 'version = "[^"]*"', "version = `"$env:VERSION`""
-        Set-Content -Path Cargo.toml -Value $content
+        $newContent = $content -replace '(?m)^version = "[^"]*"', "version = `"$env:VERSION`""
+        Set-Content -Path Cargo.toml -Value $newContent -NoNewline
     
     - name: Update version in wix.toml
       run: |
         $content = Get-Content -Path wix/wix.toml -Raw
-        $content = $content -replace 'product_version = "[^"]*"', "product_version = `"$env:VERSION`""
-        $content = $content -replace 'version = "[^"]*"', "version = `"$env:VERSION`""
-        Set-Content -Path wix/wix.toml -Value $content
+        $newContent = $content -replace 'product_version = "[^"]*"', "product_version = `"$env:VERSION`""
+        $newContent = $newContent -replace '(?m)^version = "[^"]*"', "version = `"$env:VERSION`""
+        Set-Content -Path wix/wix.toml -Value $newContent -NoNewline
     
     - name: Build Release Binary
       run: |
