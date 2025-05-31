@@ -398,6 +398,23 @@
         .gallery-overlay { position: absolute; bottom: 0; left: 0; right: 0; padding: 0.5rem; background: var(--glass-bg); backdrop-filter: blur(5px); color: white; font-size: 0.75rem; opacity: 0; transition: opacity 0.3s ease; }
         .gallery-item:hover .gallery-overlay { opacity: 1; }
         @media (max-width: 768px) { .gallery-item { width: calc(50% - 0.5rem); } }
+        
+        /* Add download progress styles */
+        .download-progress {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 0%;
+            height: 2px;
+            background: var(--primary-color);
+            transition: width 0.3s ease;
+            border-radius: 0 0 0.5rem 0.5rem;
+        }
+
+        .downloading {
+            pointer-events: none;
+            opacity: 0.7;
+        }
     </style>
 </head>
 <body>
@@ -737,6 +754,61 @@
                     breadcrumb.appendChild(item);
                 });
             }
+        });
+
+        // Add download handling
+        document.querySelectorAll('.download-btn').forEach(btn => {
+            btn.addEventListener('click', async function(e) {
+                e.preventDefault();
+                const card = this.closest('.file-card');
+                const progressBar = card.querySelector('.download-progress');
+                const filename = this.dataset.filename;
+                const size = parseInt(this.dataset.size, 10);
+                
+                try {
+                    card.classList.add('downloading');
+                    const response = await fetch(this.href);
+                    
+                    if (!response.ok) throw new Error('Download failed');
+                    
+                    const reader = response.body.getReader();
+                    const contentLength = response.headers.get('content-length');
+                    let receivedLength = 0;
+                    
+                    const chunks = [];
+                    while(true) {
+                        const {done, value} = await reader.read();
+                        
+                        if (done) break;
+                        
+                        chunks.push(value);
+                        receivedLength += value.length;
+                        
+                        if (contentLength) {
+                            const progress = (receivedLength / parseInt(contentLength)) * 100;
+                            progressBar.style.width = progress + '%';
+                        }
+                    }
+                    
+                    // Combine chunks and download
+                    const blob = new Blob(chunks);
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = filename;
+                    document.body.appendChild(a);
+                    a.click();
+                    window.URL.revokeObjectURL(url);
+                    document.body.removeChild(a);
+                    
+                    showToast('Download completed successfully!', 'success');
+                } catch (error) {
+                    showToast('Download failed. Please try again.', 'error');
+                } finally {
+                    card.classList.remove('downloading');
+                    progressBar.style.width = '0%';
+                }
+            });
         });
     </script>
 </body>

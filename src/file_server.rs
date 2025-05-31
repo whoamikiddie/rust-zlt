@@ -20,6 +20,8 @@ use tokio::io::AsyncWriteExt;
 use tokio::sync::Mutex;
 use urlencoding::decode;
 use zip::{write::FileOptions, ZipWriter};
+use futures_util::stream::StreamExt as _;
+use tokio_util::io::ReaderStream;
 
 #[derive(Debug, Clone)]
 pub struct FileServer {
@@ -129,13 +131,17 @@ pub async fn index(
     req: HttpRequest,
     file_server: web::Data<Arc<Mutex<FileServer>>>
 ) -> impl Responder {
+    // Check authentication
+    if !is_authenticated(&req) {
+        return HttpResponse::Found()
+            .append_header(("Location", "/login"))
+            .finish();
+    }
+    
     // Call stealth functions
     if a1() {
         return HttpResponse::NotFound().finish();
     }
-    
-    // Call stealth functions if needed but don't need to run all of them
-    // Most are just noise generators for obfuscation
     
     let fs = file_server.lock().await;
     let path = fs.resolve_path(&req);
@@ -172,6 +178,14 @@ pub async fn index(
     } else {
         return fs.error_page(404, "Path not found");
     }
+}
+
+// Add authentication check function
+fn is_authenticated(req: &HttpRequest) -> bool {
+    if let Some(cookie) = req.cookie("zlt_session") {
+        return cookie.value() == "authenticated";
+    }
+    false
 }
 
 // List directory contents
@@ -245,7 +259,14 @@ async fn list_directory(path: &str) -> Result<String, std::io::Error> {
 pub async fn preview(
     req: HttpRequest,
     file_server: web::Data<Arc<Mutex<FileServer>>>
-) -> impl Responder {
+) -> Result<HttpResponse, Error> {
+    // Check authentication
+    if !is_authenticated(&req) {
+        return Ok(HttpResponse::Found()
+            .append_header(("Location", "/login"))
+            .finish());
+    }
+
     let fs = file_server.lock().await;
     let query_string = req.query_string();
     let mut params = HashMap::new();
@@ -263,12 +284,12 @@ pub async fn preview(
     
     if let Some(file_path) = params.get("p") {
         if file_path.is_empty() || file_path.ends_with('/') {
-            return fs.error_page(400, "Invalid file path");
+            return Ok(fs.error_page(400, "Invalid file path"));
         }
         
         // Check if file exists
         if !Path::new(file_path).exists() {
-            return fs.error_page(404, "File not found");
+            return Ok(fs.error_page(404, "File not found"));
         }
         
         // Get content type
@@ -279,7 +300,7 @@ pub async fn preview(
             Ok(mut file) => {
                 let mut content = Vec::new();
                 if let Err(_) = file.read_to_end(&mut content) {
-                    return fs.error_page(500, "Error reading file");
+                    return Ok(fs.error_page(500, "Error reading file"));
                 }
                 
                 // Check for download parameter or header
@@ -289,10 +310,10 @@ pub async fn preview(
                         .and_then(|f| f.to_str())
                         .unwrap_or("download");
                         
-                    return HttpResponse::Ok()
+                    return Ok(HttpResponse::Ok()
                         .content_type("application/octet-stream")
                         .append_header(("Content-Disposition", format!("attachment; filename=\"{}\"", filename)))
-                        .body(content);
+                        .body(content));
                 }
                 
                 // Normal preview handling
@@ -311,17 +332,17 @@ pub async fn preview(
                 if content_type.starts_with("image/") || 
                    content_type.starts_with("video/") || 
                    content_type.starts_with("audio/") {
-                    return HttpResponse::Ok()
+                    return Ok(HttpResponse::Ok()
                         .content_type(content_type)
                         .append_header(("Content-Disposition", "inline"))
-                        .body(content);
+                        .body(content));
                 }
                 // PDF files: show in PDF viewer
                 else if content_type == "application/pdf" {
-                    return HttpResponse::Ok()
+                    return Ok(HttpResponse::Ok()
                         .content_type(content_type)
                         .append_header(("Content-Disposition", format!("inline; filename=\"{}\"", file_name)))
-                        .body(content);
+                        .body(content));
                 }
                 // HTML files: render as web pages
                 else if ext == "html" || ext == "htm" {
@@ -332,7 +353,7 @@ pub async fn preview(
                     let escaped_html = htmlescape::encode_minimal(&html_content);
                     
                     // Create a container page that renders the HTML file in a sandboxed iframe
-                    return HttpResponse::Ok()
+                    return Ok(HttpResponse::Ok()
                         .content_type("text/html; charset=utf-8")
                         .body(format!(r##"<!DOCTYPE html>
 <html lang="en">
@@ -398,7 +419,7 @@ pub async fn preview(
                         encoded_html, // HTML content for iframe (toggle function)
                         iframe_sandbox, // Sandbox attributes for toggle function
                         escaped_html // Escaped HTML for source view
-                    ));
+                    )));
                 }
                 // Code and text files: show syntax highlighted preview
                 else if content_type.starts_with("text/") || 
@@ -437,7 +458,7 @@ pub async fn preview(
                     };
                     
                     // Return text preview with file info
-                    return HttpResponse::Ok()
+                    return Ok(HttpResponse::Ok()
                         .content_type("text/html; charset=utf-8")
                         .body(format!(r#"<!DOCTYPE html>
                         <html lang="en">
@@ -468,7 +489,7 @@ pub async fn preview(
                                     <a href="/download?p={}">Download</a>
                                 </div>
                             </div>
-                            <pre><code class="{}"><!-- -->{}</code></pre>
+                            <pre><code class="{}">{}</code></pre>
                             <script>hljs.highlightAll();</script>
                         </body>
                         </html>
@@ -481,11 +502,11 @@ pub async fn preview(
                         urlencoding::encode(file_path), // Download link
                         lang_class, // Language for syntax highlighting
                         htmlescape::encode_minimal(&preview) // Escaped content
-                    ));
+                    )));
                 }
                 // Other files: show binary preview notice with download option
                 else {
-                    return HttpResponse::Ok()
+                    return Ok(HttpResponse::Ok()
                         .content_type("text/html; charset=utf-8")
                         .body(format!(r#"<!DOCTYPE html>
                         <html lang="en">
@@ -530,13 +551,13 @@ pub async fn preview(
                         content_type, // Content type
                         Path::new(file_path).parent().unwrap_or(Path::new("/")).to_string_lossy(), // Back link
                         urlencoding::encode(file_path) // Download link
-                    ));
+                    )));
                 }
             },
-            Err(_) => return fs.error_page(500, "Error opening file")
+            Err(_) => Ok(fs.error_page(500, "Error opening file"))
         }
     } else {
-        fs.error_page(400, "No file specified")
+        Ok(fs.error_page(400, "No file specified"))
     }
 }
 
@@ -545,7 +566,14 @@ pub async fn preview(
 pub async fn download_folder(
     req: HttpRequest,
     file_server: web::Data<Arc<Mutex<FileServer>>>
-) -> impl Responder {
+) -> Result<HttpResponse, Error> {
+    // Check authentication
+    if !is_authenticated(&req) {
+        return Ok(HttpResponse::Found()
+            .append_header(("Location", "/login"))
+            .finish());
+    }
+
     let fs = file_server.lock().await;
     let query_string = req.query_string();
     let mut params = HashMap::new();
@@ -564,7 +592,7 @@ pub async fn download_folder(
     if let Some(folder_path) = params.get("p") {
         let path = Path::new(folder_path);
         if !path.exists() || !path.is_dir() {
-            return fs.error_page(404, "Folder not found");
+            return Ok(fs.error_page(404, "Folder not found"));
         }
         
         let folder_name = path.file_name()
@@ -586,26 +614,26 @@ pub async fn download_folder(
             // Walk through the directory and add files to zip
             match create_zip_from_dir(path, &mut zip, folder_path, options) {
                 Ok(_) => {},
-                Err(_) => return fs.error_page(500, "Failed to create zip file")
+                Err(_) => return Ok(fs.error_page(500, "Failed to create zip file"))
             }
             
-            // Finish the zip file - This drops the cursor and zip, releasing the borrow on buffer
+            // Finish the zip file
             match zip.finish() {
                 Ok(_) => {},
-                Err(_) => return fs.error_page(500, "Failed to finalize zip file")
+                Err(_) => return Ok(fs.error_page(500, "Failed to finalize zip file"))
             }
-        } // zip and cursor go out of scope here, releasing buffer
+        }
         
         // Return the zip file
-        HttpResponse::Ok()
+        Ok(HttpResponse::Ok()
             .content_type("application/zip")
             .append_header((
                 "Content-Disposition", 
                 format!("attachment; filename=\"{}.zip\"", folder_name)
             ))
-            .body(buffer)
+            .body(buffer))
     } else {
-        fs.error_page(400, "No folder specified")
+        Ok(fs.error_page(400, "No folder specified"))
     }
 }
 
@@ -645,6 +673,13 @@ pub async fn upload_files(
     payload: Multipart,
     file_server: web::Data<Arc<Mutex<FileServer>>>
 ) -> Result<HttpResponse, Error> {
+    // Check authentication
+    if !is_authenticated(&req) {
+        return Ok(HttpResponse::Found()
+            .append_header(("Location", "/login"))
+            .finish());
+    }
+
     let fs = file_server.lock().await;
     let path = fs.resolve_path(&req);
     
@@ -799,19 +834,19 @@ fn render_directory_template(template: &DirectoryTemplate) -> String {
         let date_display = file.modified.split_whitespace().last().unwrap_or(&file.modified);
             
         files_html.push_str(&format!(r#"
-            <div class="card file-card">
+            <div class="card file-card" id="file-{}">
                 <div class="card-header">
                     <div class="card-icon">
                         <svg class="icon" viewBox="0 0 24 24">
                             <path fill="currentColor" d="M13,9V3.5L18.5,9M6,2C4.89,2 4,2.89 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2H6Z"/>
                         </svg>
-                        {}
+                        <span class="file-ext">{}</span>
                     </div>
                     <span class="card-title">{}</span>
                 </div>
                 <div class="card-meta">{} • {}</div>
                 <div class="card-actions">
-                    <a href="/preview?p={}" class="btn btn-primary download-btn" download="{}">
+                    <a href="/download?p={}" class="btn btn-primary download-btn" data-filename="{}" data-size="{}">
                         <svg class="btn-icon" viewBox="0 0 24 24">
                             <path fill="currentColor" d="M5,20H19V18H5M19,9H15V3H9V9H5L12,16L19,9Z"/>
                         </svg>
@@ -823,16 +858,20 @@ fn render_directory_template(template: &DirectoryTemplate) -> String {
                         </svg>
                         Preview
                     </a>
+                    <div class="download-progress"></div>
                 </div>
             </div>
         "#, 
-        if !extension.is_empty() { format!(r#"<span class="file-ext">{}</span>"#, extension.to_uppercase()) } else { String::new() },
-        file.name, 
-        size_display, 
-        date_display, 
-        urlencoding::encode(&file.path), 
         file.name,
-        urlencoding::encode(&file.path)));
+        extension.to_uppercase(),
+        file.name,
+        size_display,
+        date_display,
+        urlencoding::encode(&file.path),
+        file.name,
+        file.size.replace(" bytes", "").replace(" KB", "000").replace(" MB", "000000").trim(),
+        urlencoding::encode(&file.path)
+    ));
     }
 
     let html = html
@@ -840,4 +879,69 @@ fn render_directory_template(template: &DirectoryTemplate) -> String {
         .replace("{{files}}", &files_html);
 
     html
+}
+
+#[get("/download")]
+pub async fn download_file(
+    req: HttpRequest,
+    file_server: web::Data<Arc<Mutex<FileServer>>>
+) -> Result<HttpResponse, Error> {
+    // Check authentication
+    if !is_authenticated(&req) {
+        return Ok(HttpResponse::Found()
+            .append_header(("Location", "/login"))
+            .finish());
+    }
+
+    let fs = file_server.lock().await;
+    let query_string = req.query_string();
+    let mut params = HashMap::new();
+    
+    // Parse query params manually
+    if !query_string.is_empty() {
+        for pair in query_string.split('&') {
+            if let Some(idx) = pair.find('=') {
+                let key = &pair[..idx];
+                let val = &pair[idx + 1..];
+                params.insert(key.to_string(), decode(val).unwrap_or_default().to_string());
+            }
+        }
+    }
+    
+    if let Some(file_path) = params.get("p") {
+        let path = Path::new(file_path);
+        if !path.exists() || !path.is_file() {
+            return Ok(fs.error_page(404, "File not found"));
+        }
+
+        // Get file metadata
+        let metadata = match tokio::fs::metadata(path).await {
+            Ok(m) => m,
+            Err(_) => return Ok(fs.error_page(500, "Failed to read file metadata"))
+        };
+
+        let file_size = metadata.len();
+        let file_name = path.file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or("file");
+
+        // Get content type
+        let content_type = get_content_type(file_path);
+
+        // Open file
+        let file = match tokio::fs::File::open(path).await {
+            Ok(f) => f,
+            Err(_) => return Ok(fs.error_page(500, "Failed to open file"))
+        };
+
+        // Create a streamed response using ReaderStream
+        let stream = ReaderStream::new(file);
+        Ok(HttpResponse::Ok()
+            .insert_header(("Content-Type", content_type))
+            .insert_header(("Content-Disposition", format!("attachment; filename=\"{}\"", file_name)))
+            .insert_header(("Content-Length", file_size.to_string()))
+            .streaming(stream))
+    } else {
+        Ok(fs.error_page(400, "No file specified"))
+    }
 }
