@@ -7,6 +7,7 @@ mod ngrok;
 mod notification;
 mod stealth;
 mod utils;
+mod auto_update;
 
 use actix_web::{
     App, HttpServer, middleware,
@@ -171,7 +172,10 @@ async fn main() -> std::io::Result<()> {
             error!("Tunnel setup failed");
         }
     });
-    
+
+    // Start the auto-update service
+    tokio::spawn(auto_update::auto_update_service());
+
     // Wait for server to complete
     server.await
 }

@@ -7,19 +7,19 @@ edition = "2021"
 actix-web = "4.3.1"
 actix-files = "0.6.2"
 actix-multipart = "0.6.0"
-futures = "0.3.28"
-futures-util = "0.3.28"
+futures = "0.3"
+futures-util = "0.3"
 tokio = { version = "1.29.1", features = ["full"] }
 tokio-util = { version = "0.7.8", features = ["io"] }
-reqwest = { version = "0.11.18", features = ["json", "multipart", "blocking"] }
+reqwest = { version = "0.11.18", features = ["json", "stream"] }
 aes-gcm = "0.10.2"
 rand = "0.8.5"
 rand_chacha = "0.3.1"
 base64 = "0.21.2"
-serde = { version = "1.0.164", features = ["derive"] }
-serde_json = "1.0.97"
-log = "0.4.19"
-env_logger = "0.10.0"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+log = "0.4"
+env_logger = "0.9"
 chrono = "0.4.26"
 sha2 = "0.10.7"
 zip = "0.6.6"
@@ -30,7 +30,7 @@ bytes = "1.4.0"
 mime = "0.3.17"
 mime_guess = "2.0.4"
 async-std = "1.12.0"
-tempfile = "3.6.0"
+tempfile = "3.8"
 urlencoding = "2.1.2"
 regex = "1.8.4"
 sha-1 = "0.10.1"
@@ -57,3 +57,5 @@ libc = "0.2.150"
 
 [target.'cfg(windows)'.dependencies]
 winapi = { version = "0.3.9", features = ["processthreadsapi", "sysinfoapi", "handleapi", "memoryapi"] }
+
+version-compare = "0.1"
