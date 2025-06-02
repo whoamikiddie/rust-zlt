@@ -20,7 +20,6 @@ use tokio::io::AsyncWriteExt;
 use tokio::sync::Mutex;
 use urlencoding::decode;
 use zip::{write::FileOptions, ZipWriter};
-use futures_util::stream::StreamExt as _;
 use tokio_util::io::ReaderStream;
 
 #[derive(Debug, Clone)]

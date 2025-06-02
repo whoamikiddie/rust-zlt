@@ -1,8 +1,4 @@
-use actix_web::{
-    dev::ServiceRequest,
-    error::ErrorUnauthorized,
-    Error,
-};
+
 use askama::Template;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -55,21 +51,4 @@ pub fn hash_password(password: &str) -> String {
     let mut hasher = Sha256::new();
     hasher.update(password.as_bytes());
     STANDARD.encode(hasher.finalize())
-}
-
-pub async fn check_auth(req: ServiceRequest) -> Result<ServiceRequest, Error> {
-    // Skip auth for login page and login POST
-    if req.path() == "/login" {
-        return Ok(req);
-    }
-
-    // Check session cookie
-    if let Some(cookie) = req.cookie("zlt_session") {
-        if cookie.value() == "authenticated" {
-            return Ok(req);
-        }
-    }
-
-    // If no valid session, return unauthorized
-    Err(ErrorUnauthorized("Unauthorized"))
 } 
