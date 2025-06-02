@@ -23,3 +23,22 @@ Thumbs.db
 .cursor/rules/*
 .cursor
 .cursor/rules
+
+# Rust binary files
+/target/
+/test-other-system/zlt
+*.exe
+*.dll
+*.so
+*.dylib
+
+# IDE and editor files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS-specific files
+.DS_Store
+Thumbs.db
