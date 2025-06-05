@@ -9,7 +9,8 @@ A secure and feature-rich file server implementation in Rust, designed for fast 
 - File upload via drag-and-drop or file picker
 - File download and preview (images, videos, audio, text)
 - Folder zipping and download
-- Ngrok integration for public URL tunneling
+- Tunneling for public URL access:
+  - Ngrok integration
 - Telegram notifications for server status
 - AES-GCM encryption utilities
 - Stealth functions for obfuscation
@@ -59,10 +60,19 @@ Edit the `src/config.rs` file to configure:
 2. Get your bot token and chat ID
 3. Update the token and chat ID in the configuration
 
-### Ngrok Integration
+### Tunneling Integration
+#### Ngrok (Linux/macOS)
 1. Create a free account at [ngrok.com](https://ngrok.com)
 2. Get your authentication token
 3. Update the token in the configuration
+
+#### Tunnelto (Windows)
+1. Install tunnelto: `cargo install tunnelto` or download from [tunnelto releases](https://github.com/agrinman/tunnelto/releases)
+2. Add tunnelto to your system PATH
+3. The authentication key is already configured in the application
+4. No additional setup required
+
+If tunnelto is not found, the application will attempt to install it automatically using cargo.
 
 ### Other Settings
 - Server port
@@ -72,7 +82,12 @@ Edit the `src/config.rs` file to configure:
 ## Troubleshooting
 
 ### Common Issues
-- If ngrok fails to start, ensure your authentication token is valid
+- If tunneling fails to start:
+  - For ngrok (Linux/macOS): ensure your authentication token is valid
+  - For tunnelto (Windows): 
+    - Ensure tunnelto is properly installed with `tunnelto --version`
+    - If not installed, the app will try to install it automatically via cargo
+    - If that fails, a local URL will be provided as fallback
 - If Telegram notifications aren't received, check your bot token and chat ID
 - For upload issues, verify file permissions in the target directory
 
@@ -81,7 +96,8 @@ Edit the `src/config.rs` file to configure:
 ### Project Structure
 - `src/main.rs` - Application entry point
 - `src/file_server.rs` - File server implementation
-- `src/ngrok.rs` - Ngrok tunnel handling
+- `src/ngrok.rs` - Ngrok tunnel handling (Linux/macOS)
+- `src/tunnelto.rs` - Tunnelto support (Windows)
 - `src/notification.rs` - Telegram notification system
 - `src/encryption.rs` - Encryption utilities
 - `src/config.rs` - Configuration management

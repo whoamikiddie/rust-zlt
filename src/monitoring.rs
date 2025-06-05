@@ -186,211 +186,61 @@ impl SystemMonitor {
             return self.stats.clone();
         }
         
-        // Selectively refresh only what we need to save resources
-        self.system.refresh_cpu();
+        // Refresh system information
         self.system.refresh_memory();
-        
-        // Only periodically refresh these (every 3 cycles) to save resources
-        static mut REFRESH_COUNTER: u8 = 0;
-        unsafe {
-            REFRESH_COUNTER = (REFRESH_COUNTER + 1) % 3;
-            if REFRESH_COUNTER == 0 {
-                self.system.refresh_disks_list();
-                self.system.refresh_disks();
-                self.system.refresh_networks_list();
-                self.system.refresh_networks();
-                // Only refresh components if we actually use CPU temp
-                self.system.refresh_components_list();
-                self.system.refresh_components();
-            }
-        }
-        
-        // Only refresh CPU stats based on resource level
-        let cpu_usage = if self.resource_level >= 1 {
             self.system.refresh_cpu();
-            self.system.global_cpu_info().cpu_usage()
+        
+        // Get memory information with explicit types
+        let memory_total: u64 = self.system.total_memory();
+        let memory_free: u64 = self.system.free_memory();
+        let memory_used: u64 = memory_total.saturating_sub(memory_free);
+        let memory_usage_percent = if memory_total > 0 {
+            (memory_used as f32 / memory_total as f32) * 100.0
         } else {
-            // In minimal mode, just use the last value
-            self.stats.cpu_usage
+            0.0
         };
-        
-        // Update CPU history
-        self.cpu_history.pop_front();
-        self.cpu_history.push_back(cpu_usage);
-        
-        // Check current memory usage to see if we need to reduce resource usage
-        self.system.refresh_memory();
-        let memory_total = self.system.total_memory();
-        let memory_used = self.system.used_memory();
-        
-        // Adjust resource level based on memory usage
-        if memory_used > self.memory_limit_max {
-            // Severe memory pressure - go to minimal mode
-            self.resource_level = 0;
-            println!("SEVERE: Memory usage too high ({} bytes), switching to minimal resources", memory_used);
-        } else if memory_used > (self.memory_limit_max * 80 / 100) {
-            // High memory pressure - go to low mode
-            self.resource_level = 1;
-            println!("WARNING: Memory usage high ({} bytes), switching to low resources", memory_used);
-        } else if memory_used < self.memory_limit_min {
-            // Memory usage too low - can use more resources
-            self.resource_level = 2;
-        } else {
-            // Normal memory usage - use medium resources
-            self.resource_level = 2;
-        }
-        
-        // Enforce memory limits with periodic cleanup - more sophisticated approach
-        let now = Instant::now();
-        let cleanup_interval = if memory_used > self.memory_limit_max {
-            // More frequent cleanup under memory pressure
-            Duration::from_secs(10)
-        } else {
-            Duration::from_secs(30)
-        };
-        
-        if now.duration_since(self.last_memory_cleanup) > cleanup_interval || memory_used > self.memory_limit_max {
-            // Record cleanup time first to prevent double cleanup if this takes time
-            self.last_memory_cleanup = now;
-            let pre_cleanup_memory = self.system.used_memory();
-            
-            // Platform-specific memory management with improved techniques
-            self.perform_memory_cleanup();
-            
-            // Recreate system monitor with appropriate refresh kind based on resource level
-            let refresh_kind = match self.resource_level {
-                0 => RefreshKind::new().with_memory(), // Minimal - memory only
-                1 => RefreshKind::new().with_memory().with_cpu(CpuRefreshKind::new()), // Low
-                _ => RefreshKind::new().with_memory().with_cpu(CpuRefreshKind::new()) // Medium and above
-            };
-            
-            self.system = System::new_with_specifics(refresh_kind);
-            
-            // Allow time for memory to be reclaimed
-            std::thread::sleep(Duration::from_millis(50));
-            
-            // Calculate memory savings
-            let post_cleanup_memory = self.system.used_memory();
-            let memory_saved = pre_cleanup_memory.saturating_sub(post_cleanup_memory);
-            
-            // Only log if significant memory was saved or we're over limits
-            if memory_saved > MB || memory_used > self.memory_limit_max {
-                println!("Memory cleanup performed: {} bytes freed, current usage: {} bytes", 
-                          memory_saved, post_cleanup_memory);
-            }
-        }
-        
-        let memory_usage_percent = (memory_used as f32 / memory_total as f32) * 100.0;
         
         // Update memory history
         self.memory_history.pop_front();
         self.memory_history.push_back(memory_used);
         
-        // Refresh disk stats based on resource level - less frequent in lower modes
-        let (disk_total, disk_free, disk_usage_percent) = if 
-            (self.resource_level >= 2 && self.cycle_count % 5 == 0) || // Medium+ mode: every 5 cycles
-            (self.resource_level == 1 && self.cycle_count % 10 == 0) // Low mode: every 10 cycles
-        {
-            self.system.refresh_disks_list();
-            let mut total = 0;
-            let mut free = 0;
-            
-            // Only get the first few disks in low resource mode
-            let disk_limit = if self.resource_level >= 2 { usize::MAX } else { 2 };
-            
-            for (i, disk) in self.system.disks().iter().enumerate() {
-                if i >= disk_limit { break; }
-                total += disk.total_space();
-                free += disk.available_space();
+        // Get disk information
+        let mut disk_total: u64 = 0;
+        let mut disk_free: u64 = 0;
+        
+        if self.resource_level >= 1 {
+            self.system.refresh_disks();
+            for disk in self.system.disks() {
+                disk_total = disk_total.saturating_add(disk.total_space());
+                disk_free = disk_free.saturating_add(disk.available_space());
             }
-            
-            let used = total.saturating_sub(free);
-            let percent = if total > 0 { (used as f32 / total as f32) * 100.0 } else { 0.0 };
-            
-            (total, free, percent)
+        }
+        
+        let disk_usage_percent = if disk_total > 0 {
+            ((disk_total - disk_free) as f32 / disk_total as f32) * 100.0
         } else {
-            // Use cached values from last refresh
-            (self.stats.disk_total, self.stats.disk_free, self.stats.disk_usage_percent)
+            0.0
         };
         
-        // Network stats - very expensive, only refresh in higher resource modes
-        let (network_received, network_transmitted) = if 
-            (self.resource_level >= 3 && self.cycle_count % 3 == 0) || // High mode: every 3 cycles
-            (self.resource_level == 2 && self.cycle_count % 8 == 0)   // Medium mode: every 8 cycles
-        {
-            self.system.refresh_networks_list();
-            let mut received = 0;
-            let mut transmitted = 0;
-            
-            // Only get first few networks to save memory
-            let net_limit = if self.resource_level >= 3 { usize::MAX } else { 2 };
-            
-            let mut i = 0;
-            for (_interface_name, network) in self.system.networks() {
-                if i >= net_limit { break; }
-                received += network.received();
-                transmitted += network.transmitted();
-                i += 1;
+        // Get network information
+        let mut network_received: u64 = 0;
+        let mut network_transmitted: u64 = 0;
+        
+        if self.resource_level >= 1 {
+            self.system.refresh_networks();
+            for (_interface, network) in self.system.networks() {
+                network_received = network_received.saturating_add(network.received());
+                network_transmitted = network_transmitted.saturating_add(network.transmitted());
             }
-            
-            (received, transmitted)
-        } else {
-            // Use cached values
-            (self.stats.network_received, self.stats.network_transmitted)
-        };
+        }
         
-        // System uptime - low cost so refresh every time
-        let uptime = self.system.uptime();
-        
-        // Load average - low cost so refresh every time
-        let system_load = {
-            let load_avg = self.system.load_average();
-            vec![load_avg.one, load_avg.five, load_avg.fifteen]
-        };
-        
-        // CPU temperature - only get if we refreshed components this cycle
-        // CPU temperature - only in higher resource modes
-        let cpu_temp = if self.resource_level >= 2 && self.cycle_count % 10 == 0 {
-            self.system.refresh_components();
-            let mut max_temp: f32 = 0.0;
-            
-            for component in self.system.components() {
-                if component.label().contains("CPU") {
-                    max_temp = max_temp.max(component.temperature());
-                    break; // Only get first CPU temp to save resources
-                }
-            }
-            
-            Some(max_temp)
-        } else {
-            // Use cached value
-            self.stats.cpu_temp
-        };
-            
-        // Process count - only refresh periodically to save resources
-        let processes_count = unsafe {
-            if REFRESH_COUNTER == 0 {
-                self.system.refresh_processes();
-                self.system.processes().len()
-            } else {
-                self.stats.processes_count
-            }
-        };
-        
-        // Hostname - only need to get this once since it rarely changes
-        let hostname = if self.stats.hostname.is_empty() {
-            self.system.host_name().unwrap_or_else(|| String::from("Unknown"))
-        } else {
-            self.stats.hostname.clone()
-        };
-        
-        // Refresh stats
+        // Update stats
         self.stats = SystemStats {
             timestamp: SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .unwrap_or_default()
                 .as_secs(),
-            cpu_usage,
+            cpu_usage: self.system.global_cpu_info().cpu_usage(),
             memory_total,
             memory_used,
             memory_usage_percent,
@@ -399,16 +249,25 @@ impl SystemMonitor {
             disk_usage_percent,
             network_received,
             network_transmitted,
-            uptime,
-            system_load,
-            cpu_temp,
-            processes_count,
-            hostname,
-            memory_within_bounds: memory_used >= self.memory_limit_min && memory_used <= self.memory_limit_max,
+            uptime: self.system.uptime(),
+            system_load: {
+                let load = self.system.load_average();
+                vec![load.one, load.five, load.fifteen]
+            },
+            cpu_temp: self.system.components().iter()
+                .find(|c| c.label().contains("CPU"))
+                .map(|c| c.temperature()),
+            processes_count: self.system.processes().len(),
+            hostname: self.system.host_name().unwrap_or_else(|| String::from("unknown")),
+            memory_within_bounds: memory_used <= self.memory_limit_max,
         };
         
+        // Perform memory cleanup if needed
+        if memory_used > self.memory_limit_max {
+            self.perform_memory_cleanup();
+        }
+        
         self.last_update = now;
-        self.cycle_count += 1;
         self.stats.clone()
     }
     
@@ -488,13 +347,17 @@ pub fn init_monitoring() -> MonitoringData {
                     std::thread::sleep(Duration::from_millis(100)); // Give OS time to reclaim memory
                     // Platform-specific memory management
                     #[cfg(unix)]
-                    unsafe { libc::malloc_trim(0); } // Force OS-level memory trim on Unix
+                    unsafe { 
+                        libc::malloc_trim(0); 
+                    }
                     
                     #[cfg(windows)]
-                    {
-                        // Alternative memory cleanup on Windows
-                        drop(Vec::<u8>::with_capacity(1024 * 1024)); // Allocate and drop a large vector
-                        std::thread::sleep(Duration::from_millis(10)); // Brief pause to allow reclamation
+                    unsafe {
+                        use winapi::um::heapapi::{GetProcessHeap, HeapCompact};
+                        let heap = GetProcessHeap();
+                        if !heap.is_null() {
+                            HeapCompact(heap, 0);
+                        }
                     }
                     
                     // 2. Set very conservative refresh policy
@@ -512,7 +375,19 @@ pub fn init_monitoring() -> MonitoringData {
                     lock.resource_level = 1; // Low resources mode
                     
                     // Release memory proactively
-                    unsafe { libc::malloc_trim(0); }
+                    #[cfg(unix)]
+                    unsafe { 
+                        libc::malloc_trim(0); 
+                    }
+                    
+                    #[cfg(windows)]
+                    unsafe {
+                        use winapi::um::heapapi::{GetProcessHeap, HeapCompact};
+                        let heap = GetProcessHeap();
+                        if !heap.is_null() {
+                            HeapCompact(heap, 0);
+                        }
+                    }
                 }
                 else if stats.memory_used < lock.memory_limit_min {
                     // Memory too low - can use more resources

