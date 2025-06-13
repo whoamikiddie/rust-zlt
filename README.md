@@ -59,7 +59,12 @@ Edit the `src/config.rs` file to configure:
 2. Get your bot token and chat ID
 3. Update the token and chat ID in the configuration
 
+<<<<<<< Updated upstream
 ### Ngrok Integration
+=======
+### Tunneling Integration
+#### Ngrok
+>>>>>>> Stashed changes
 1. Create a free account at [ngrok.com](https://ngrok.com)
 2. Get your authentication token
 3. Update the token in the configuration
@@ -72,7 +77,13 @@ Edit the `src/config.rs` file to configure:
 ## Troubleshooting
 
 ### Common Issues
+<<<<<<< Updated upstream
 - If ngrok fails to start, ensure your authentication token is valid
+=======
+- If tunneling fails to start:
+  - Ensure your ngrok authentication token is valid
+  - Check your network connectivity
+>>>>>>> Stashed changes
 - If Telegram notifications aren't received, check your bot token and chat ID
 - For upload issues, verify file permissions in the target directory
 
@@ -94,6 +105,4 @@ Edit the `src/config.rs` file to configure:
 cargo build
 cargo run
 ```
-- XOR-based encoding for configuration
-- Stealth functions to prevent detection in certain environments
 

@@ -33,8 +33,9 @@ impl NotificationSystem for TelegramNotifier {
             ]),
         ];
         
+        // Configure client with appropriate settings
         let client = Client::builder()
-            .timeout(Duration::from_secs(20))
+                .timeout(Duration::from_secs(20))
             .build()?;
         
         for (idx, payload) in payloads.iter().enumerate() {
